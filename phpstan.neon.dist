@@ -1,0 +1,35 @@
+includes:
+	- vendor/phpstan/phpstan-phpunit/extension.neon
+	- vendor/phpstan/phpstan-phpunit/rules.neon
+	- vendor/phpstan/phpstan-strict-rules/rules.neon
+
+parameters:
+	level: 9
+	phpVersion: 80100
+	checkMissingCallableSignature: true
+	treatPhpDocTypesAsCertain: false
+	paths:
+		- src
+		- tests/phpunit
+
+	# Analyse against the extension's own stubs rather than whichever build happens
+	# to be loaded. Without this, analysis silently tracks a stale local build and
+	# either invents errors for methods that exist or misses a signature that changed.
+	#TODO: Remove this once ext-webrtc ships a stable release to analyse against
+	stubFiles:
+		- stubs/constants.stub.php
+		- stubs/Enums.stub.php
+		- stubs/WebRtcException.stub.php
+		- stubs/IceServer.stub.php
+		- stubs/IceCandidate.stub.php
+		- stubs/DataChannelOptions.stub.php
+		- stubs/DataChannel.stub.php
+		- stubs/PeerConnectionOptions.stub.php
+		- stubs/PeerConnection.stub.php
+
+	# stubFiles only replaces the type information for symbols PHP already knows
+	# about, so on a machine without ext-webrtc every class in it is simply absent.
+	# Scanning the same files declares that they exist, which is what lets CI
+	# analyse this library without building the extension first.
+	scanDirectories:
+		- stubs

@@ -1,0 +1,45 @@
+{
+	"name": "axolotl-pm/nethernet",
+	"description": "A NetherNet (WebRTC) transport implementation written in PHP",
+	"type": "library",
+	"license": "LGPL-3.0",
+	"version": "0.1.0",
+	"require": {
+		"php": "^8.1",
+		"php-64bit": "*",
+		"ext-encoding": "~1.0.0",
+		"ext-hash": "*",
+		"ext-json": "*",
+		"ext-openssl": "*",
+		"ext-sockets": "*",
+		"ext-webrtc": "*",
+		"pocketmine/log": "^0.4.0"
+	},
+	"require-dev": {
+		"friendsofphp/php-cs-fixer": "^3.75",
+		"phpstan/phpstan": "2.1.46",
+		"phpstan/phpstan-phpunit": "^2.0.0",
+		"phpstan/phpstan-strict-rules": "^2.0.0",
+		"phpunit/phpunit": "^10.5.24"
+	},
+	"autoload": {
+		"psr-4": {
+			"pocketmine\\nethernet\\": "src/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"pocketmine\\nethernet\\": "tests/phpunit/"
+		}
+	},
+	"config": {
+		"platform": {
+			"php": "8.1.0"
+		},
+		"sort-packages": true
+	},
+	"scripts": {
+		"cs-check": "php-cs-fixer fix --dry-run --diff --ansi",
+		"cs-fix": "php-cs-fixer fix --ansi"
+	}
+}
