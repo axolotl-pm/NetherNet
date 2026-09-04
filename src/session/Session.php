@@ -57,7 +57,7 @@ final class Session{
 	private readonly array $assemblers;
 
 	private bool $closed = false;
-	private ?string $disconnectReason = null;
+	private ?DisconnectReason $disconnectReason = null;
 
 	/**
 	 * @param DataChannel[] $channels Keyed by {@link Reliability} case name.
@@ -105,7 +105,7 @@ final class Session{
 
 	public function isClosed() : bool{ return $this->closed; }
 
-	public function getDisconnectReason() : ?string{ return $this->disconnectReason; }
+	public function getDisconnectReason() : ?DisconnectReason{ return $this->disconnectReason; }
 
 	/**
 	 * Sends a message payload to the client, splitting large messages if needed on reliable channels.
@@ -130,9 +130,9 @@ final class Session{
 				$channel->send($segment);
 			}
 		}catch(WebRtcException $e){
-			$this->close("Failed to send on the " . $reliability->getChannelLabel() . ": " . $e->getMessage());
+			$this->close(DisconnectReason::SEND_FAILED);
 
-			throw new SessionException("Failed to send on the " . $reliability->getChannelLabel(), 0, $e);
+			throw new SessionException("Failed to send on the " . $reliability->getChannelLabel() . ": " . $e->getMessage(), 0, $e);
 		}
 	}
 
@@ -160,9 +160,9 @@ final class Session{
 					}
 				}
 			}catch(FramingException|WebRtcException $e){
-				$this->close("Bad data on the " . $reliability->getChannelLabel() . ": " . $e->getMessage());
+				$this->close(DisconnectReason::BAD_DATA);
 
-				throw new SessionException("Bad data on the " . $reliability->getChannelLabel(), 0, $e);
+				throw new SessionException("Bad data on the " . $reliability->getChannelLabel() . ": " . $e->getMessage(), 0, $e);
 			}
 		}
 
@@ -178,24 +178,13 @@ final class Session{
 		}
 
 		$state = $this->peerConnection->getState();
-		$terminal = match($state){
-			ConnectionState::FAILED, ConnectionState::CLOSED => true,
-			default => false
-		};
-		if($terminal){
-			$this->close("Peer connection entered state " . $state->name);
+		if($state === ConnectionState::FAILED){
+			$this->close(DisconnectReason::CONNECTION_FAILED);
 
 			return false;
 		}
 
-		foreach(Reliability::cases() as $reliability){
-			if($this->channels[$reliability->name]->isClosed()){
-				$this->close("The " . $reliability->getChannelLabel() . " was closed by the peer");
-
-				return false;
-			}
-		}
-
+		/* Check queue limits before channel closures so flooding is reported accurately. */
 		$queuedBytes = 0;
 		$queuedMessages = 0;
 		$buffered = 0;
@@ -205,25 +194,38 @@ final class Session{
 			$buffered += $channel->getBufferedAmount();
 		}
 		if($queuedBytes > $this->maxReceiveQueueSize){
-			$this->close("Unread receive queue reached $queuedBytes bytes, over the $this->maxReceiveQueueSize byte limit");
+			$this->close(DisconnectReason::RECEIVE_QUEUE_TOO_MANY_BYTES);
 
 			return false;
 		}
 		if($queuedMessages > $this->maxReceiveQueueMessages){
-			$this->close("Unread receive queue reached $queuedMessages messages, over the $this->maxReceiveQueueMessages message limit");
+			$this->close(DisconnectReason::RECEIVE_QUEUE_TOO_MANY_MESSAGES);
 
 			return false;
 		}
 		if($buffered > $this->maxSendQueueSize){
-			$this->close("Send queue reached $buffered bytes, over the $this->maxSendQueueSize byte limit");
+			$this->close(DisconnectReason::SEND_QUEUE_TOO_MANY_BYTES);
 
 			return false;
+		}
+
+		if($state === ConnectionState::CLOSED){
+			$this->close(DisconnectReason::PEER_DISCONNECT);
+
+			return false;
+		}
+		foreach(Reliability::cases() as $reliability){
+			if($this->channels[$reliability->name]->isClosed()){
+				$this->close(DisconnectReason::PEER_DISCONNECT);
+
+				return false;
+			}
 		}
 
 		return true;
 	}
 
-	public function close(?string $reason = null) : void{
+	public function close(DisconnectReason $reason = DisconnectReason::SERVER_DISCONNECT) : void{
 		if($this->closed){
 			return;
 		}
@@ -247,7 +249,7 @@ final class Session{
 	 */
 	private function requireOpen() : void{
 		if($this->closed){
-			throw new SessionException("Session is closed" . ($this->disconnectReason !== null ? ": $this->disconnectReason" : ""));
+			throw new SessionException("Session is closed" . ($this->disconnectReason !== null ? ": " . $this->disconnectReason->getMessage() : ""));
 		}
 	}
 }

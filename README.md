@@ -11,7 +11,7 @@ A PHP implementation of **NetherNet**, the WebRTC DataChannel transport used by 
 - PHP 8.1 or newer (64-bit)
 - `ext-webrtc`
 - `ext-openssl`, `ext-json`, `ext-sockets`
-- 
+
 ## Quick Start
 
 ```php
@@ -22,6 +22,7 @@ use pocketmine\nethernet\identity\ServerIdentity;
 use pocketmine\nethernet\NetherNetServer;
 use pocketmine\nethernet\ServerConfiguration;
 use pocketmine\nethernet\ServerEventListener;
+use pocketmine\nethernet\session\DisconnectReason;
 use pocketmine\nethernet\session\Reliability;
 use pocketmine\nethernet\session\Session;
 use pocketmine\nethernet\signaling\http\HttpSignaling;
@@ -37,8 +38,8 @@ $listener = new class implements ServerEventListener{
         $session->send($payload, $reliability);
     }
 
-    public function onSessionClose(Session $session, ?string $reason) : void{
-        echo "Client disconnected: " . ($reason ?? "unknown") . PHP_EOL;
+    public function onSessionClose(Session $session, DisconnectReason $reason) : void{
+        echo "Client disconnected: " . $reason->getMessage() . PHP_EOL;
     }
 };
 

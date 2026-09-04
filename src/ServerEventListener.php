@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet;
 
+use pocketmine\nethernet\session\DisconnectReason;
 use pocketmine\nethernet\session\Reliability;
 use pocketmine\nethernet\session\Session;
 
@@ -35,5 +36,5 @@ interface ServerEventListener{
 	/**
 	 * Called when a client disconnects or the session is closed.
 	 */
-	public function onSessionClose(Session $session, ?string $reason) : void;
+	public function onSessionClose(Session $session, DisconnectReason $reason) : void;
 }

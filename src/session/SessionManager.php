@@ -76,7 +76,7 @@ final class SessionManager{
 		try{
 			$this->listener->onSessionOpen($session);
 		}catch(\Throwable $e){
-			$session->close("Rejected by the host: " . $e->getMessage());
+			$session->close(DisconnectReason::REJECTED_BY_HOST);
 			$this->forget($session);
 
 			throw $e;
@@ -147,7 +147,7 @@ final class SessionManager{
 	/**
 	 * Closes a session and notifies listeners.
 	 */
-	public function close(Session $session, ?string $reason = null) : void{
+	public function close(Session $session, DisconnectReason $reason = DisconnectReason::SERVER_DISCONNECT) : void{
 		$session->close($reason);
 		$this->forget($session);
 	}
@@ -158,10 +158,12 @@ final class SessionManager{
 		}
 		unset($this->sessions[$session->getId()]);
 
+		/* Preserves the original disconnect reason if the session was already closed. */
 		$session->close();
+		$reason = $session->getDisconnectReason() ?? DisconnectReason::SERVER_DISCONNECT;
 
-		$this->logger?->debug("Session " . $session->getId() . " closed: " . ($session->getDisconnectReason() ?? "no reason given"));
-		$this->listener->onSessionClose($session, $session->getDisconnectReason());
+		$this->logger?->debug("Session " . $session->getId() . " closed: " . $reason->getMessage());
+		$this->listener->onSessionClose($session, $reason);
 	}
 
 	public function getSession(int $id) : ?Session{
@@ -180,7 +182,7 @@ final class SessionManager{
 		return count($this->sessions);
 	}
 
-	public function shutdown(?string $reason = "Server is shutting down") : void{
+	public function shutdown(DisconnectReason $reason = DisconnectReason::SERVER_SHUTDOWN) : void{
 		foreach($this->sessions as $session){
 			$session->close($reason);
 			$this->forget($session);
