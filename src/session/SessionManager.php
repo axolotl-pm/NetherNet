@@ -23,7 +23,7 @@ use function array_values;
 use function count;
 
 /**
- * Manages active client sessions and coordinates reading incoming messages and handling disconnects.
+ * Manages active client sessions and processes incoming messages.
  */
 final class SessionManager{
 
@@ -45,6 +45,8 @@ final class SessionManager{
 		private readonly Segmenter $segmenter = new Segmenter(),
 		private readonly int $maxPayloadSize = Segmenter::MAX_PAYLOAD_SIZE,
 		private readonly int $maxReceiveQueueSize = Session::DEFAULT_MAX_RECEIVE_QUEUE_SIZE,
+		private readonly int $maxReceiveQueueMessages = Session::DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES,
+		private readonly int $maxSendQueueSize = Session::DEFAULT_MAX_SEND_QUEUE_SIZE,
 		private readonly ?\Logger $logger = null
 	){}
 
@@ -63,7 +65,9 @@ final class SessionManager{
 			$identity,
 			self::segmenterFor($channels, $this->segmenter),
 			$this->maxPayloadSize,
-			$this->maxReceiveQueueSize
+			$this->maxReceiveQueueSize,
+			$this->maxReceiveQueueMessages,
+			$this->maxSendQueueSize
 		);
 		$this->sessions[$session->getId()] = $session;
 
@@ -82,7 +86,7 @@ final class SessionManager{
 	}
 
 	/**
-	 * Adjusts the segmenter to respect the lowest negotiated message size limit across data channels.
+	 * Adjusts the segmenter to respect the lowest negotiated message size across data channels.
 	 *
 	 * @param DataChannel[] $channels
 	 * @phpstan-param array<string, DataChannel> $channels
@@ -102,7 +106,7 @@ final class SessionManager{
 	}
 
 	/**
-	 * Checks connection health and reads pending incoming messages across all active sessions.
+	 * Checks active sessions and reads pending incoming messages.
 	 */
 	public function tick() : void{
 		foreach($this->sessions as $session){

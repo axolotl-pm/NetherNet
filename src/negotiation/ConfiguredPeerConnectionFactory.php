@@ -34,11 +34,13 @@ final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 	 * @param IceServer[] $iceServers
 	 * @phpstan-param list<IceServer> $iceServers
 	 *
-	 * @param string|null $bindAddress         Local address to bind ICE sockets, or null for all interfaces.
-	 * @param int|null    $portRangeBegin      Start of port range restriction.
-	 * @param int|null    $portRangeEnd        End of port range restriction.
-	 * @param int         $maxMessageSize      Maximum advertised SCTP message size.
-	 * @param int         $maxReceiveQueueSize Native receive queue size budget.
+	 * @param string|null $bindAddress             Local address to bind ICE sockets, or null for all interfaces.
+	 * @param int|null    $portRangeBegin          Start of UDP port range.
+	 * @param int|null    $portRangeEnd            End of UDP port range.
+	 * @param int         $maxMessageSize          Maximum advertised SCTP message size.
+	 * @param int         $maxReceiveQueueSize     Maximum receive queue size in bytes.
+	 * @param int         $maxReceiveQueueMessages Maximum receive queue message count.
+	 * @param int         $maxSendQueueSize        Maximum send queue size in bytes.
 	 */
 	public function __construct(
 		array $iceServers = [],
@@ -46,7 +48,9 @@ final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 		?int $portRangeBegin = null,
 		?int $portRangeEnd = null,
 		int $maxMessageSize = self::DEFAULT_MAX_MESSAGE_SIZE,
-		int $maxReceiveQueueSize = Session::DEFAULT_MAX_RECEIVE_QUEUE_SIZE * 2
+		int $maxReceiveQueueSize = Session::DEFAULT_MAX_RECEIVE_QUEUE_SIZE * 2,
+		int $maxReceiveQueueMessages = Session::DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES * 2,
+		int $maxSendQueueSize = Session::DEFAULT_MAX_SEND_QUEUE_SIZE * 2
 	){
 		if(($portRangeBegin === null) !== ($portRangeEnd === null)){
 			throw new \InvalidArgumentException("Port range needs both a start and an end, or neither");
@@ -58,9 +62,15 @@ final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 			throw new \InvalidArgumentException("Maximum message size must be between 2 and " . self::DEFAULT_MAX_MESSAGE_SIZE . ", got $maxMessageSize");
 		}
 
+		/*
+		 * Higher than per-session limits so sessions close with a reason
+		 * before the native extension rejects them.
+		 */
 		$options = PeerConnectionOptions::create()
 			->setMaxMessageSize($maxMessageSize)
 			->setMaxReceiveQueueSize($maxReceiveQueueSize)
+			->setMaxReceiveQueueMessages($maxReceiveQueueMessages)
+			->setMaxSendQueueSize($maxSendQueueSize)
 			->setIceTcpEnabled(false);
 
 		if($bindAddress !== null){

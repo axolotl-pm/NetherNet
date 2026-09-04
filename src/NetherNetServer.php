@@ -62,6 +62,8 @@ final class NetherNetServer{
 				$segmenter,
 				$configuration->maxPayloadSize,
 				$configuration->maxReceiveQueueSize,
+				$configuration->maxReceiveQueueMessages,
+				$configuration->maxSendQueueSize,
 				$configuration->logger
 			),
 			$configuration->logger

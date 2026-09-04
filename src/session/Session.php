@@ -30,9 +30,19 @@ use function count;
 final class Session{
 
 	/**
-	 * Default maximum receive buffer threshold in bytes before dropping the session.
+	 * Default maximum unread incoming bytes before dropping a session.
 	 */
 	public const DEFAULT_MAX_RECEIVE_QUEUE_SIZE = 8388608;
+
+	/**
+	 * Default maximum unread incoming messages before dropping a session.
+	 */
+	public const DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES = 4096;
+
+	/**
+	 * Default maximum queued outgoing bytes before dropping a session.
+	 */
+	public const DEFAULT_MAX_SEND_QUEUE_SIZE = 8388608;
 
 	/**
 	 * @var DataChannel[]
@@ -63,7 +73,9 @@ final class Session{
 		private readonly ?VerifiedIdentity $identity,
 		private readonly Segmenter $segmenter = new Segmenter(),
 		int $maxPayloadSize = Segmenter::MAX_PAYLOAD_SIZE,
-		private readonly int $maxReceiveQueueSize = self::DEFAULT_MAX_RECEIVE_QUEUE_SIZE
+		private readonly int $maxReceiveQueueSize = self::DEFAULT_MAX_RECEIVE_QUEUE_SIZE,
+		private readonly int $maxReceiveQueueMessages = self::DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES,
+		private readonly int $maxSendQueueSize = self::DEFAULT_MAX_SEND_QUEUE_SIZE
 	){
 		$assemblers = [];
 		foreach(Reliability::cases() as $reliability){
@@ -158,7 +170,7 @@ final class Session{
 	}
 
 	/**
-	 * Checks connection health and enforces memory limits on unread incoming data.
+	 * Checks connection health and enforces queue size limits.
 	 */
 	public function checkLiveness() : bool{
 		if($this->closed){
@@ -184,12 +196,26 @@ final class Session{
 			}
 		}
 
-		$queued = 0;
+		$queuedBytes = 0;
+		$queuedMessages = 0;
+		$buffered = 0;
 		foreach($this->channels as $channel){
-			$queued += $channel->getAvailableAmount();
+			$queuedBytes += $channel->getAvailableAmount();
+			$queuedMessages += $channel->getQueuedMessageCount();
+			$buffered += $channel->getBufferedAmount();
 		}
-		if($queued > $this->maxReceiveQueueSize){
-			$this->close("Unread receive queue reached $queued bytes, over the $this->maxReceiveQueueSize byte limit");
+		if($queuedBytes > $this->maxReceiveQueueSize){
+			$this->close("Unread receive queue reached $queuedBytes bytes, over the $this->maxReceiveQueueSize byte limit");
+
+			return false;
+		}
+		if($queuedMessages > $this->maxReceiveQueueMessages){
+			$this->close("Unread receive queue reached $queuedMessages messages, over the $this->maxReceiveQueueMessages message limit");
+
+			return false;
+		}
+		if($buffered > $this->maxSendQueueSize){
+			$this->close("Send queue reached $buffered bytes, over the $this->maxSendQueueSize byte limit");
 
 			return false;
 		}

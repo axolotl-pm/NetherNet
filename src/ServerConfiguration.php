@@ -33,14 +33,16 @@ final class ServerConfiguration{
 	public const DEFAULT_MAX_MESSAGE_SIZE = Segmenter::MAX_SEGMENT_PAYLOAD_SIZE + 1;
 
 	/**
-	 * @param IdentityProvider      $identityProvider      Issues server identity assertions (`a=identity`) for SDP answers.
-	 * @param IdentityVerifier      $identityVerifier      Verifies connecting client identity assertions and GameServerTokens.
-	 * @param PeerConnectionFactory $peerConnectionFactory Factory for creating WebRTC PeerConnection instances.
-	 * @param float                 $gatheringTimeout      Timeout in seconds for Full ICE candidate gathering.
-	 * @param float                 $channelTimeout        Timeout in seconds for data channels to open after answering.
-	 * @param int                   $maxMessageSize        Maximum SCTP message size in bytes.
-	 * @param int                   $maxPayloadSize        Maximum reassembled message payload size in bytes.
-	 * @param int                   $maxReceiveQueueSize   Maximum queued unread bytes before dropping a session.
+	 * @param IdentityProvider      $identityProvider        Issues server identity assertions (`a=identity`) for SDP answers.
+	 * @param IdentityVerifier      $identityVerifier        Verifies connecting client identity assertions and GameServerTokens.
+	 * @param PeerConnectionFactory $peerConnectionFactory   Factory for creating WebRTC PeerConnection instances.
+	 * @param float                 $gatheringTimeout        Timeout in seconds for ICE candidate gathering.
+	 * @param float                 $channelTimeout          Timeout in seconds for data channels to open.
+	 * @param int                   $maxMessageSize          Maximum SCTP message size in bytes.
+	 * @param int                   $maxPayloadSize          Maximum reassembled message payload size in bytes.
+	 * @param int                   $maxReceiveQueueSize     Maximum unread incoming bytes before dropping a session.
+	 * @param int                   $maxReceiveQueueMessages Maximum unread incoming messages before dropping a session.
+	 * @param int                   $maxSendQueueSize        Maximum queued outgoing bytes before dropping a session.
 	 */
 	public function __construct(
 		public readonly IdentityProvider $identityProvider,
@@ -51,6 +53,8 @@ final class ServerConfiguration{
 		public readonly int $maxMessageSize = self::DEFAULT_MAX_MESSAGE_SIZE,
 		public readonly int $maxPayloadSize = Segmenter::MAX_PAYLOAD_SIZE,
 		public readonly int $maxReceiveQueueSize = Session::DEFAULT_MAX_RECEIVE_QUEUE_SIZE,
+		public readonly int $maxReceiveQueueMessages = Session::DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES,
+		public readonly int $maxSendQueueSize = Session::DEFAULT_MAX_SEND_QUEUE_SIZE,
 		public readonly ?\Logger $logger = null
 	){
 		if($maxMessageSize < 2 || $maxMessageSize > self::DEFAULT_MAX_MESSAGE_SIZE){
@@ -61,6 +65,12 @@ final class ServerConfiguration{
 		}
 		if($maxReceiveQueueSize < 1){
 			throw new \InvalidArgumentException("Maximum receive queue size must be positive, got $maxReceiveQueueSize");
+		}
+		if($maxReceiveQueueMessages < 1){
+			throw new \InvalidArgumentException("Maximum receive queue message count must be positive, got $maxReceiveQueueMessages");
+		}
+		if($maxSendQueueSize < 1){
+			throw new \InvalidArgumentException("Maximum send queue size must be positive, got $maxSendQueueSize");
 		}
 		if($gatheringTimeout <= 0.0 || $channelTimeout <= 0.0){
 			throw new \InvalidArgumentException("Timeouts must be positive");

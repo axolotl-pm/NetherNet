@@ -40,12 +40,16 @@ final class DataChannel
     /** Bytes waiting to be read by receive(). */
     public function getAvailableAmount(): int {}
 
+    /** Messages waiting to be read by receive(), which empty ones add no bytes to. */
+    public function getQueuedMessageCount(): int {}
+
     /**
      * Queue a binary message. Returns false if the message was buffered rather
      * than sent immediately, which is not an error.
      *
-     * @throws WebRtcException if the channel is closed or the payload exceeds
-     *                         getMaxMessageSize()
+     * @throws WebRtcException if the channel is closed, the payload exceeds
+     *                         getMaxMessageSize(), or the send queue has
+     *                         reached the limit set on the connection
      */
     public function send(string $data): bool {}
 
