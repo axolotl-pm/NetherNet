@@ -23,6 +23,7 @@ use pocketmine\nethernet\session\framing\Assembler;
 use pocketmine\nethernet\session\framing\FramingException;
 use pocketmine\nethernet\session\framing\Segmenter;
 use function count;
+use function microtime;
 
 /**
  * Represents a connected client session over WebRTC data channels.
@@ -45,6 +46,11 @@ final class Session{
 	public const DEFAULT_MAX_SEND_QUEUE_SIZE = 8388608;
 
 	/**
+	 * Timeout in seconds to flush queued outgoing data before disconnecting.
+	 */
+	public const DISCONNECT_FLUSH_TIMEOUT = 2.0;
+
+	/**
 	 * @var DataChannel[]
 	 * @phpstan-var array<string, DataChannel>
 	 */
@@ -58,6 +64,9 @@ final class Session{
 
 	private bool $closed = false;
 	private ?DisconnectReason $disconnectReason = null;
+
+	private ?DisconnectReason $pendingDisconnect = null;
+	private float $disconnectDeadline = 0.0;
 
 	/**
 	 * @param DataChannel[] $channels Keyed by {@link Reliability} case name.
@@ -184,6 +193,16 @@ final class Session{
 			return false;
 		}
 
+		if($this->pendingDisconnect !== null){
+			if($this->bufferedBytes() === 0 || $state !== ConnectionState::CONNECTED || microtime(true) >= $this->disconnectDeadline){
+				$this->close($this->pendingDisconnect);
+
+				return false;
+			}
+
+			return true;
+		}
+
 		/* Check queue limits before channel closures so flooding is reported accurately. */
 		$queuedBytes = 0;
 		$queuedMessages = 0;
@@ -223,6 +242,27 @@ final class Session{
 		}
 
 		return true;
+	}
+
+	/**
+	 * Requests a graceful disconnect after pending outgoing data is sent.
+	 */
+	public function initiateDisconnect(DisconnectReason $reason) : void{
+		if($this->closed || $this->pendingDisconnect !== null){
+			return;
+		}
+
+		$this->pendingDisconnect = $reason;
+		$this->disconnectDeadline = microtime(true) + self::DISCONNECT_FLUSH_TIMEOUT;
+	}
+
+	private function bufferedBytes() : int{
+		$buffered = 0;
+		foreach($this->channels as $channel){
+			$buffered += $channel->getBufferedAmount();
+		}
+
+		return $buffered;
 	}
 
 	public function close(DisconnectReason $reason = DisconnectReason::SERVER_DISCONNECT) : void{

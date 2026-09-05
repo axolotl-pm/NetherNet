@@ -145,11 +145,10 @@ final class SessionManager{
 	}
 
 	/**
-	 * Closes a session and notifies listeners.
+	 * Initiates a graceful disconnect.
 	 */
 	public function close(Session $session, DisconnectReason $reason = DisconnectReason::SERVER_DISCONNECT) : void{
-		$session->close($reason);
-		$this->forget($session);
+		$session->initiateDisconnect($reason);
 	}
 
 	private function forget(Session $session) : void{
