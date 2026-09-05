@@ -231,7 +231,7 @@ final class HttpSignaling implements SignalingInterface{
 
 		while(($accepted = @socket_accept($socket)) !== false){
 			if(count($this->connections) >= $this->maxConnections && !$this->evictStalest()){
-				$this->logger?->debug("Refused a signalling connection; all slots are busy");
+				$this->logger?->debug("Refused a signaling connection; all slots are busy");
 				socket_close($accepted);
 				continue;
 			}
@@ -241,7 +241,7 @@ final class HttpSignaling implements SignalingInterface{
 				continue;
 			}
 
-			$this->logger?->debug("Signalling connection opened from " . $connection->peerName);
+			$this->logger?->debug("Signaling connection opened from " . $connection->peerName);
 			$this->connections[$this->nextConnectionId++] = $connection;
 		}
 
@@ -616,7 +616,7 @@ final class HttpSignaling implements SignalingInterface{
 	 */
 	private static function checkNotTls(HttpConnection $connection) : void{
 		if(strlen($connection->input) >= 3 && $connection->input[0] === "\x16" && $connection->input[1] === "\x03"){
-			throw new HttpException(400, "Peer is speaking TLS to a plaintext signalling endpoint; configure a certificate");
+			throw new HttpException(400, "Peer is speaking TLS to a plaintext signaling endpoint; configure a certificate");
 		}
 	}
 
@@ -682,7 +682,7 @@ final class HttpSignaling implements SignalingInterface{
 			return false;
 		}
 
-		$this->logger?->debug("Dropping the stalest signalling connection (" . $this->connections[$stalestId]->peerName . ") to make room");
+		$this->logger?->debug("Dropping the stalest signaling connection (" . $this->connections[$stalestId]->peerName . ") to make room");
 		$this->disconnect($this->connections[$stalestId]);
 		unset($this->connections[$stalestId]);
 
@@ -691,7 +691,7 @@ final class HttpSignaling implements SignalingInterface{
 
 	private function disconnect(HttpConnection $connection) : void{
 		if($connection->negotiation !== null && ($connection->negotiation->getAnswer() === null || $connection->output !== "")){
-			$connection->negotiation->fail("Signalling connection closed before the answer was delivered");
+			$connection->negotiation->fail("Signaling connection closed before the answer was delivered");
 		}
 
 		if(is_resource($connection->stream)){

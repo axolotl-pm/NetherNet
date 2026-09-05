@@ -33,12 +33,12 @@ final class Signal{
 	public static function parse(string $message) : self{
 		$parts = explode(" ", $message, 3);
 		if(!isset($parts[2])){
-			throw new DiscoveryException("Signalling message must have at least three space-separated fields");
+			throw new DiscoveryException("Signaling message must have at least three space-separated fields");
 		}
 
 		$type = SignalType::tryFrom($parts[0]);
 		if($type === null){
-			throw new DiscoveryException("Unknown signalling message type '$parts[0]'");
+			throw new DiscoveryException("Unknown signaling message type '$parts[0]'");
 		}
 
 		return new self($type, $parts[1], $parts[2]);

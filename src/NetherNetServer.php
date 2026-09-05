@@ -75,7 +75,7 @@ final class NetherNetServer{
 	 */
 	public function addSignaling(SignalingInterface $signaling) : void{
 		if($this->started){
-			throw new \LogicException("Signalling transports must be added before the server is started");
+			throw new \LogicException("Signaling transports must be added before the server is started");
 		}
 		$this->signaling[] = $signaling;
 	}
@@ -105,7 +105,7 @@ final class NetherNetServer{
 			throw $e;
 		}
 
-		$this->logger?->debug("NetherNet server started with " . count($this->signaling) . " signalling transport(s)");
+		$this->logger?->debug("NetherNet server started with " . count($this->signaling) . " signaling transport(s)");
 	}
 
 	/**

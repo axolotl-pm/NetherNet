@@ -20,7 +20,7 @@ use pocketmine\nethernet\negotiation\Negotiation;
 use pocketmine\nethernet\negotiation\Negotiator;
 
 /**
- * Stands in for the real negotiator so a signalling transport can be driven
+ * Stands in for the real negotiator so a signaling transport can be driven
  * without a WebRTC stack behind it.
  *
  * Transports are worth testing on their own: what they do with an answer, a
