@@ -80,6 +80,25 @@ final class SessionDescriptionTest extends TestCase{
 	}
 
 	/**
+	 * The candidate count is what the negotiator caps, since the native stack
+	 * resolves a hostname candidate on a thread of its own. Only candidate lines
+	 * count, wherever they sit, and other attributes do not.
+	 */
+	public function testCountCandidates() : void{
+		self::assertSame(0, SessionDescription::parse(self::build())->countCandidates());
+
+		$description = SessionDescription::parse(self::build(
+			extraSession: ["a=candidate:1 1 udp 1 1.2.3.4 5000 typ host"],
+			extraMedia: [
+				"a=candidate:2 1 udp 1 5.6.7.8 5001 typ host",
+				"a=candidate:3 1 udp 1 host.example 5002 typ host",
+				"a=end-of-candidates"
+			]
+		));
+		self::assertSame(3, $description->countCandidates());
+	}
+
+	/**
 	 * Adding then removing the assertion has to leave the description exactly as
 	 * it was. The peer's copy is what its signature covers, so any stray byte left
 	 * behind breaks verification later.

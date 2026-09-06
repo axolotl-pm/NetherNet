@@ -55,6 +55,7 @@ final class NetherNetServer{
 				$configuration->peerConnectionFactory,
 				$configuration->gatheringTimeout,
 				$configuration->channelTimeout,
+				$configuration->maxRemoteCandidates,
 				$configuration->logger
 			),
 			new SessionManager(

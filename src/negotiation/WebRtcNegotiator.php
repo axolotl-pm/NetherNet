@@ -33,6 +33,13 @@ use function microtime;
 final class WebRtcNegotiator implements Negotiator{
 
 	/**
+	 * A peer gathers a handful of candidates under Full ICE, so anything past
+	 * this is refused. The ceiling matters because the native stack starts a
+	 * resolver thread for every candidate whose address is a hostname.
+	 */
+	public const DEFAULT_MAX_REMOTE_CANDIDATES = 32;
+
+	/**
 	 * @var WebRtcNegotiation[]
 	 * @phpstan-var array<int, WebRtcNegotiation>
 	 */
@@ -48,8 +55,9 @@ final class WebRtcNegotiator implements Negotiator{
 	private bool $closed = false;
 
 	/**
-	 * @param float $gatheringTimeout Timeout in seconds for ICE candidate gathering (Full ICE).
-	 * @param float $channelTimeout   Timeout in seconds for remote peer to open data channels (`ReliableDataChannel` and `UnreliableDataChannel`).
+	 * @param float $gatheringTimeout    Timeout in seconds for ICE candidate gathering (Full ICE).
+	 * @param float $channelTimeout      Timeout in seconds for remote peer to open data channels (`ReliableDataChannel` and `UnreliableDataChannel`).
+	 * @param int   $maxRemoteCandidates ICE candidates a peer may hand this connection, counted in the offer and by trickle on their own.
 	 */
 	public function __construct(
 		private readonly IdentityProvider $identityProvider,
@@ -57,10 +65,14 @@ final class WebRtcNegotiator implements Negotiator{
 		private readonly PeerConnectionFactory $peerConnectionFactory = new ConfiguredPeerConnectionFactory(),
 		private readonly float $gatheringTimeout = 15.0,
 		private readonly float $channelTimeout = 5.0,
+		private readonly int $maxRemoteCandidates = self::DEFAULT_MAX_REMOTE_CANDIDATES,
 		private readonly ?\Logger $logger = null
 	){
 		if($gatheringTimeout <= 0.0 || $channelTimeout <= 0.0){
 			throw new \InvalidArgumentException("Timeouts must be positive");
+		}
+		if($maxRemoteCandidates < 1){
+			throw new \InvalidArgumentException("Maximum remote candidates must be positive, got $maxRemoteCandidates");
 		}
 	}
 
@@ -75,6 +87,11 @@ final class WebRtcNegotiator implements Negotiator{
 			$fingerprint = $offer->getFingerprint();
 		}catch(SdpException $e){
 			throw new NegotiationException("Offer is not usable: " . $e->getMessage(), ErrorCode::FAILED_TO_SET_REMOTE_DESCRIPTION, $e);
+		}
+
+		$candidateCount = $offer->countCandidates();
+		if($candidateCount > $this->maxRemoteCandidates){
+			throw new NegotiationException("Offer carries $candidateCount ICE candidates, over the limit of " . $this->maxRemoteCandidates, ErrorCode::CANDIDATE_ADD);
 		}
 
 		try{
@@ -102,7 +119,8 @@ final class WebRtcNegotiator implements Negotiator{
 			$networkId,
 			$identity,
 			$candidateMode,
-			microtime(true) + $this->gatheringTimeout
+			microtime(true) + $this->gatheringTimeout,
+			$this->maxRemoteCandidates
 		);
 		$this->negotiations[$this->nextNegotiationId++] = $negotiation;
 

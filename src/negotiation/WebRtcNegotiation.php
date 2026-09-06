@@ -33,6 +33,7 @@ final class WebRtcNegotiation implements Negotiation{
 
 	private ?string $localUfrag = null;
 	private int $candidateIndex = 0;
+	private int $remoteCandidateCount = 0;
 
 	/**
 	 * @var DataChannel[]
@@ -46,7 +47,8 @@ final class WebRtcNegotiation implements Negotiation{
 		private readonly string $networkId,
 		private readonly ?VerifiedIdentity $identity,
 		private readonly CandidateMode $candidateMode,
-		private float $deadline
+		private float $deadline,
+		private readonly int $maxRemoteCandidates = WebRtcNegotiator::DEFAULT_MAX_REMOTE_CANDIDATES
 	){}
 
 	public function getAnswer() : ?string{ return $this->answer; }
@@ -68,6 +70,10 @@ final class WebRtcNegotiation implements Negotiation{
 		if($this->state->isFinished()){
 			return;
 		}
+		if($this->remoteCandidateCount >= $this->maxRemoteCandidates){
+			return;
+		}
+		$this->remoteCandidateCount++;
 
 		try{
 			$this->peerConnection->addRemoteCandidate(IceCandidate::create($candidate));

@@ -19,6 +19,7 @@ use pocketmine\nethernet\identity\IdentityProvider;
 use pocketmine\nethernet\identity\IdentityVerifier;
 use pocketmine\nethernet\negotiation\ConfiguredPeerConnectionFactory;
 use pocketmine\nethernet\negotiation\PeerConnectionFactory;
+use pocketmine\nethernet\negotiation\WebRtcNegotiator;
 use pocketmine\nethernet\session\framing\Segmenter;
 use pocketmine\nethernet\session\Session;
 
@@ -43,6 +44,7 @@ final class ServerConfiguration{
 	 * @param int                   $maxReceiveQueueSize     Maximum unread incoming bytes before dropping a session.
 	 * @param int                   $maxReceiveQueueMessages Maximum unread incoming messages before dropping a session.
 	 * @param int                   $maxSendQueueSize        Maximum queued outgoing bytes before dropping a session.
+	 * @param int                   $maxRemoteCandidates     Maximum ICE candidates a peer may offer or trickle per connection.
 	 */
 	public function __construct(
 		public readonly IdentityProvider $identityProvider,
@@ -55,6 +57,7 @@ final class ServerConfiguration{
 		public readonly int $maxReceiveQueueSize = Session::DEFAULT_MAX_RECEIVE_QUEUE_SIZE,
 		public readonly int $maxReceiveQueueMessages = Session::DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES,
 		public readonly int $maxSendQueueSize = Session::DEFAULT_MAX_SEND_QUEUE_SIZE,
+		public readonly int $maxRemoteCandidates = WebRtcNegotiator::DEFAULT_MAX_REMOTE_CANDIDATES,
 		public readonly ?\Logger $logger = null
 	){
 		if($maxMessageSize < 2 || $maxMessageSize > self::DEFAULT_MAX_MESSAGE_SIZE){
@@ -71,6 +74,9 @@ final class ServerConfiguration{
 		}
 		if($maxSendQueueSize < 1){
 			throw new \InvalidArgumentException("Maximum send queue size must be positive, got $maxSendQueueSize");
+		}
+		if($maxRemoteCandidates < 1){
+			throw new \InvalidArgumentException("Maximum remote candidates must be positive, got $maxRemoteCandidates");
 		}
 		if($gatheringTimeout <= 0.0 || $channelTimeout <= 0.0){
 			throw new \InvalidArgumentException("Timeouts must be positive");

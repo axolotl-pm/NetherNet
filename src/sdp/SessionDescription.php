@@ -223,6 +223,22 @@ final class SessionDescription{
 	}
 
 	/**
+	 * Counts the `a=candidate:` lines. The native stack resolves a candidate
+	 * whose address is a hostname on a thread of its own, so this is what a peer
+	 * can turn into resolver work by packing an offer with candidate lines.
+	 */
+	public function countCandidates() : int{
+		$count = 0;
+		foreach($this->lines as $line){
+			if(str_starts_with($line, "a=candidate:")){
+				$count++;
+			}
+		}
+
+		return $count;
+	}
+
+	/**
 	 * Inserts or replaces the session-level `a=identity` attribute before the media section.
 	 */
 	public function withIdentity(string $identity) : self{
