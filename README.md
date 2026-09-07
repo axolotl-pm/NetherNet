@@ -18,6 +18,7 @@ A PHP implementation of **NetherNet**, the WebRTC DataChannel transport used by 
 use pocketmine\nethernet\discovery\LanSignaling;
 use pocketmine\nethernet\discovery\MutableServerDataProvider;
 use pocketmine\nethernet\discovery\ServerData;
+use pocketmine\nethernet\identity\SelfSignedIdentityProvider;
 use pocketmine\nethernet\identity\ServerIdentity;
 use pocketmine\nethernet\NetherNetServer;
 use pocketmine\nethernet\ServerConfiguration;
@@ -48,18 +49,19 @@ $identity = file_exists('server.key')
     ? ServerIdentity::fromPrivateKeyPem(file_get_contents('server.key'))
     : ServerIdentity::generate();
 
-$config = new ServerConfiguration(identity: $identity);
+$config = new ServerConfiguration(identityProvider: new SelfSignedIdentityProvider($identity));
 $server = NetherNetServer::create($config, $listener);
 
 // 3. Add signaling transports (HTTP and LAN)
 $server->addSignaling(new HttpSignaling(
     negotiator: $server->getNegotiator(),
-    address: '0.0.0.0',
+    bindAddress: '0.0.0.0',
     port: 19132
 ));
 
 $serverDataProvider = new MutableServerDataProvider(
     ServerData::fromPongData("MCPE;Dedicated Server;800;1.21.100;0;20;0;World;Survival;1;19132;19133;")
+        ?? throw new \RuntimeException('Malformed pong data')
 );
 $server->addSignaling(new LanSignaling(
     negotiator: $server->getNegotiator(),
