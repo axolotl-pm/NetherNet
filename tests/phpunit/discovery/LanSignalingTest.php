@@ -44,7 +44,7 @@ use const SOL_UDP;
  *
  * The parts worth testing here are the ones a unit test cannot reach: that the
  * socket is set up so datagrams actually arrive, and that a peer is answered at
- * the address it was last heard from rather than one taken from the datagram.
+ * the address its offer came from rather than one another peer can claim.
  */
 final class LanSignalingTest extends TestCase{
 
@@ -239,6 +239,43 @@ final class LanSignalingTest extends TestCase{
 		$signal = Signal::parse($packet->data);
 		self::assertSame(SignalType::CONNECT_ERROR, $signal->type);
 		self::assertSame((string) ErrorCode::IDENTITY_NOT_ALLOWED->value, $signal->data);
+	}
+
+	/**
+	 * Nothing stops a LAN peer from putting someone else's NetworkID in a datagram,
+	 * so the answer has to go back to where the offer came from and nowhere else.
+	 */
+	public function testSpoofedSenderCannotRedirectTheAnswer() : void{
+		$this->startHost(new FakeNegotiator("answer-sdp"));
+
+		$impostor = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+		self::assertNotFalse($impostor);
+		self::assertTrue(socket_bind($impostor, "127.0.0.1", 0));
+		socket_set_nonblock($impostor);
+
+		try{
+			$this->sendToHost(new MessagePacket(self::HOST_NETWORK_ID, "CONNECTREQUEST 77 offer-sdp"));
+
+			//claims the peer's id from a different socket, before the host has answered
+			$spoofed = PacketSerializer::encode(new MessagePacket(self::HOST_NETWORK_ID, "Ping"), self::PEER_NETWORK_ID);
+			self::assertNotFalse(socket_sendto($impostor, $spoofed, strlen($spoofed), 0, "127.0.0.1", $this->hostPort));
+
+			$received = $this->receive();
+			self::assertNotNull($received, "the host never answered the offer");
+			[$packet] = $received;
+			self::assertInstanceOf(MessagePacket::class, $packet);
+			self::assertSame(SignalType::CONNECT_RESPONSE, Signal::parse($packet->data)->type);
+
+			$buffer = "";
+			$from = "";
+			$fromPort = 0;
+			self::assertFalse(
+				socket_recvfrom($impostor, $buffer, 65535, 0, $from, $fromPort),
+				"the answer was redirected to the peer that claimed the network id"
+			);
+		}finally{
+			socket_close($impostor);
+		}
 	}
 
 	public function testBoundSocketReportsTheExpectedAddress() : void{

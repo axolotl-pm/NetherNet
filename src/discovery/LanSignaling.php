@@ -26,7 +26,6 @@ use pocketmine\nethernet\negotiation\Negotiator;
 use pocketmine\nethernet\signaling\SignalingException;
 use pocketmine\nethernet\signaling\SignalingInterface;
 use function count;
-use function microtime;
 use function socket_bind;
 use function socket_clear_error;
 use function socket_close;
@@ -55,7 +54,10 @@ final class LanSignaling implements SignalingInterface{
 
 	public const DEFAULT_PORT = 7551;
 
-	public const ADDRESS_TIMEOUT = 15.0;
+	/**
+	 * Maximum number of datagrams to drain from the socket per tick.
+	 */
+	public const MAX_DATAGRAMS_PER_TICK = 256;
 
 	public const DEFAULT_MAX_PENDING = 64;
 
@@ -64,12 +66,6 @@ final class LanSignaling implements SignalingInterface{
 	private const PING_DATA = "Ping";
 
 	private ?\Socket $socket = null;
-
-	/**
-	 * @var PeerAddress[]
-	 * @phpstan-var array<int, PeerAddress>
-	 */
-	private array $addresses = [];
 
 	/**
 	 * @var PendingConnection[]
@@ -134,10 +130,7 @@ final class LanSignaling implements SignalingInterface{
 		}
 
 		$this->receiveAll($socket);
-
-		$now = microtime(true);
 		$this->advancePending();
-		$this->expireAddresses($now);
 	}
 
 	public function shutdown() : void{
@@ -150,7 +143,6 @@ final class LanSignaling implements SignalingInterface{
 			$pending->negotiation->fail("LAN discovery is shutting down", ErrorCode::NO_SIGNALING_CHANNEL);
 		}
 		$this->pending = [];
-		$this->addresses = [];
 
 		if($this->socket !== null){
 			socket_close($this->socket);
@@ -159,7 +151,7 @@ final class LanSignaling implements SignalingInterface{
 	}
 
 	private function receiveAll(\Socket $socket) : void{
-		while(true){
+		for($i = 0; $i < self::MAX_DATAGRAMS_PER_TICK; ++$i){
 			$buffer = "";
 			$from = "";
 			$fromPort = 0;
@@ -198,22 +190,20 @@ final class LanSignaling implements SignalingInterface{
 			return;
 		}
 
-		$this->rememberAddress($senderId, $address, $port);
-
 		if($packet instanceof RequestPacket){
 			$this->send(new ResponsePacket($this->serverDataProvider->getServerData()->write()), $address, $port);
 
 			return;
 		}
 		if($packet instanceof MessagePacket){
-			$this->handleMessage($packet, $senderId);
+			$this->handleMessage($packet, $senderId, $address, $port);
 		}
 	}
 
 	/**
 	 * @throws DiscoveryException
 	 */
-	private function handleMessage(MessagePacket $packet, int $senderId) : void{
+	private function handleMessage(MessagePacket $packet, int $senderId, string $address, int $port) : void{
 		if($packet->recipientId !== $this->networkId){
 			return;
 		}
@@ -225,20 +215,20 @@ final class LanSignaling implements SignalingInterface{
 		$key = self::keyFor($senderId, $signal->connectionId);
 
 		match($signal->type){
-			SignalType::CONNECT_REQUEST => $this->handleOffer($signal, $senderId, $key),
+			SignalType::CONNECT_REQUEST => $this->handleOffer($signal, $senderId, $key, $address, $port),
 			SignalType::CANDIDATE_ADD => $this->handleCandidate($signal, $key),
 			SignalType::CONNECT_ERROR => $this->handlePeerError($signal, $key),
 			SignalType::CONNECT_RESPONSE => null
 		};
 	}
 
-	private function handleOffer(Signal $signal, int $senderId, string $key) : void{
+	private function handleOffer(Signal $signal, int $senderId, string $key, string $address, int $port) : void{
 		if(isset($this->pending[$key])){
 			return;
 		}
 		if(count($this->pending) >= $this->maxPending){
 			$this->logger?->debug("Refusing an offer from $senderId; $this->maxPending joins are already in flight");
-			$this->sendSignal($senderId, new Signal(SignalType::CONNECT_ERROR, $signal->connectionId, (string) ErrorCode::GENERIC_FAILURE->value));
+			$this->sendSignal($senderId, new Signal(SignalType::CONNECT_ERROR, $signal->connectionId, (string) ErrorCode::GENERIC_FAILURE->value), $address, $port);
 
 			return;
 		}
@@ -251,12 +241,12 @@ final class LanSignaling implements SignalingInterface{
 			);
 		}catch(NegotiationException $e){
 			$this->logger?->debug("Refused an offer from $senderId: " . $e->getMessage());
-			$this->sendSignal($senderId, new Signal(SignalType::CONNECT_ERROR, $signal->connectionId, (string) $e->getErrorCode()->value));
+			$this->sendSignal($senderId, new Signal(SignalType::CONNECT_ERROR, $signal->connectionId, (string) $e->getErrorCode()->value), $address, $port);
 
 			return;
 		}
 
-		$this->pending[$key] = new PendingConnection($negotiation, $senderId, $signal->connectionId);
+		$this->pending[$key] = new PendingConnection($negotiation, $senderId, $address, $port, $signal->connectionId);
 	}
 
 	private function handleCandidate(Signal $signal, string $key) : void{
@@ -289,20 +279,20 @@ final class LanSignaling implements SignalingInterface{
 					SignalType::CONNECT_ERROR,
 					$pending->connectionId,
 					(string) $negotiation->getFailureCode()->value
-				));
+				), $pending->address, $pending->port);
 				unset($this->pending[$key]);
 				continue;
 			}
 
 			$answer = $negotiation->getAnswer();
 			if($answer !== null && !$pending->answerSent){
-				$this->sendSignal($pending->peerId, new Signal(SignalType::CONNECT_RESPONSE, $pending->connectionId, $answer));
+				$this->sendSignal($pending->peerId, new Signal(SignalType::CONNECT_RESPONSE, $pending->connectionId, $answer), $pending->address, $pending->port);
 				$pending->answerSent = true;
 			}
 
 			if($pending->answerSent){
 				foreach($negotiation->takeLocalCandidates() as $candidate){
-					$this->sendSignal($pending->peerId, new Signal(SignalType::CANDIDATE_ADD, $pending->connectionId, $candidate));
+					$this->sendSignal($pending->peerId, new Signal(SignalType::CANDIDATE_ADD, $pending->connectionId, $candidate), $pending->address, $pending->port);
 				}
 			}
 
@@ -312,36 +302,8 @@ final class LanSignaling implements SignalingInterface{
 		}
 	}
 
-	private function expireAddresses(float $now) : void{
-		foreach($this->addresses as $id => $address){
-			if($now - $address->lastSeen > self::ADDRESS_TIMEOUT){
-				unset($this->addresses[$id]);
-			}
-		}
-	}
-
-	private function rememberAddress(int $senderId, string $address, int $port) : void{
-		$known = $this->addresses[$senderId] ?? null;
-		if($known === null){
-			$this->addresses[$senderId] = new PeerAddress($address, $port, microtime(true));
-
-			return;
-		}
-
-		$known->address = $address;
-		$known->port = $port;
-		$known->lastSeen = microtime(true);
-	}
-
-	private function sendSignal(int $peerId, Signal $signal) : void{
-		$address = $this->addresses[$peerId] ?? null;
-		if($address === null){
-			$this->logger?->debug("Cannot reach network id $peerId; it has not been heard from recently");
-
-			return;
-		}
-
-		$this->send(new MessagePacket($peerId, $signal->toString()), $address->address, $address->port);
+	private function sendSignal(int $peerId, Signal $signal, string $address, int $port) : void{
+		$this->send(new MessagePacket($peerId, $signal->toString()), $address, $port);
 	}
 
 	private function send(Packet $packet, string $address, int $port) : void{

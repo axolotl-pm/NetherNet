@@ -24,11 +24,16 @@ final class PendingConnection{
 	public bool $answerSent = false;
 
 	/**
-	 * @param int $peerId Remote peer's 64-bit NetworkID.
+	 * @param int    $peerId       Remote peer's 64-bit NetworkID.
+	 * @param string $address      Source IP address the offer arrived from.
+	 * @param int    $port         Source UDP port the offer arrived from.
+	 * @param string $connectionId Unique identifier for this signaling session.
 	 */
 	public function __construct(
 		public readonly Negotiation $negotiation,
 		public readonly int $peerId,
+		public readonly string $address,
+		public readonly int $port,
 		public readonly string $connectionId
 	){}
 }
