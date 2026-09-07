@@ -15,12 +15,19 @@ declare(strict_types=1);
 namespace pocketmine\nethernet\identity;
 
 /**
- * Interface for verifying client GameServerTokens against Minecraft Auth Services and application policies.
+ * Verifies whether a peer's identity token is acceptable.
+ *
+ * Implementations can validate token signatures, issuers, or custom authorization policies.
+ *
+ * If no verifier is provided to {@link AssertionIdentityVerifier}, any well-formed, unexpired token
+ * is accepted.
+ *
+ * @see SelfSignedTokenVerifier
  */
 interface TokenVerifier{
 
 	/**
-	 * @throws IdentityException if the client token fails authentication or authorization checks.
+	 * @throws IdentityException if the token fails verification.
 	 */
 	public function check(JsonWebToken $token) : void;
 }

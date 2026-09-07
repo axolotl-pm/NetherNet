@@ -25,6 +25,7 @@ use function openssl_pkey_get_details;
 use function str_pad;
 use function strlen;
 use function substr;
+use function time;
 use const STR_PAD_LEFT;
 
 final class IdentityTest extends TestCase{
@@ -217,5 +218,55 @@ final class IdentityTest extends TestCase{
 
 		$this->expectException(IdentityException::class);
 		(new AssertionIdentityVerifier())->verify($tampered, self::fingerprint());
+	}
+
+	/**
+	 * A token whose signature is nothing but bytes, naming a key the peer holds. Only a
+	 * TokenVerifier stands between this and being taken at face value.
+	 */
+	private static function forgedToken(PublicKey $publicKey) : string{
+		$cpk = $publicKey->toCpk();
+
+		$header = Base64Url::encode((string) json_encode(["alg" => JsonWebSignature::ALGORITHM, "x5u" => $cpk]));
+		$claims = Base64Url::encode((string) json_encode(["exp" => time() + 3600, "cpk" => $cpk, "xuid" => "2535000000000001"]));
+
+		return $header . "." . $claims . "." . Base64Url::encode("not a signature");
+	}
+
+	private static function forgedAssertion(ServerIdentity $identity) : IdentityAssertion{
+		return IdentityAssertion::create(
+			"auth.minecraft.org",
+			self::forgedToken($identity->getPublicKey()),
+			JsonWebSignature::signDetached(self::fingerprint()->toCanonicalPayload(), $identity->getPrivateKey())
+		);
+	}
+
+	/**
+	 * Fingerprint binding says the peer holds the key it named, and stops there. PeerIdentity
+	 * is written on that basis, so it has to stay true: a host reading the result as proof of
+	 * who the peer is would be believing claims the peer wrote itself.
+	 */
+	public function testFingerprintBindingAloneAcceptsAForgedToken() : void{
+		$assertion = self::forgedAssertion(ServerIdentity::generate());
+
+		self::assertNotNull((new AssertionIdentityVerifier())->verify($assertion->encode(), self::fingerprint()));
+	}
+
+	/** Re-keying someone else's token breaks its signature, which is what this catches. */
+	public function testSelfSignedVerifierRefusesATokenThatDidNotSignItself() : void{
+		$assertion = self::forgedAssertion(ServerIdentity::generate());
+
+		$this->expectException(IdentityException::class);
+		(new AssertionIdentityVerifier(tokenVerifier: new SelfSignedTokenVerifier()))->verify($assertion->encode(), self::fingerprint());
+	}
+
+	public function testSelfSignedVerifierAcceptsAKeyThatSignedItsOwnToken() : void{
+		$identity = ServerIdentity::generate();
+		$assertion = (new SelfSignedIdentityProvider($identity, "self"))->issue(self::fingerprint());
+
+		$verified = (new AssertionIdentityVerifier(tokenVerifier: new SelfSignedTokenVerifier()))->verify($assertion->encode(), self::fingerprint());
+
+		self::assertNotNull($verified);
+		self::assertTrue($verified->publicKey->equals($identity->getPublicKey()));
 	}
 }

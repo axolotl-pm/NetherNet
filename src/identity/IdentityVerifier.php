@@ -25,9 +25,9 @@ interface IdentityVerifier{
 	 * @param string|null $attributeValue    The offer's `a=identity` value, or null if omitted.
 	 * @param Fingerprint $remoteFingerprint The offer's DTLS fingerprint to be verified against the assertion.
 	 *
-	 * @return VerifiedIdentity|null Returns null if unauthenticated peers are permitted.
+	 * @return PeerIdentity|null Returns null if peers without an assertion are permitted.
 	 *
-	 * @throws IdentityException to refuse the peer connection.
+	 * @throws IdentityException if the identity assertion is invalid or rejected.
 	 */
-	public function verify(?string $attributeValue, Fingerprint $remoteFingerprint) : ?VerifiedIdentity;
+	public function verify(?string $attributeValue, Fingerprint $remoteFingerprint) : ?PeerIdentity;
 }

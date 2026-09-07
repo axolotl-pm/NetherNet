@@ -16,7 +16,7 @@ namespace pocketmine\nethernet\negotiation;
 
 use pmmp\webrtc\DataChannel;
 use pmmp\webrtc\PeerConnection;
-use pocketmine\nethernet\identity\VerifiedIdentity;
+use pocketmine\nethernet\identity\PeerIdentity;
 use pocketmine\nethernet\session\Reliability;
 
 /**
@@ -32,6 +32,6 @@ final class EstablishedPeer{
 		public readonly PeerConnection $peerConnection,
 		public readonly array $channels,
 		public readonly string $networkId,
-		public readonly ?VerifiedIdentity $identity
+		public readonly ?PeerIdentity $identity
 	){}
 }

@@ -18,7 +18,7 @@ use pmmp\webrtc\ConnectionState;
 use pmmp\webrtc\DataChannel;
 use pmmp\webrtc\PeerConnection;
 use pmmp\webrtc\WebRtcException;
-use pocketmine\nethernet\identity\VerifiedIdentity;
+use pocketmine\nethernet\identity\PeerIdentity;
 use pocketmine\nethernet\session\framing\Assembler;
 use pocketmine\nethernet\session\framing\FramingException;
 use pocketmine\nethernet\session\framing\Segmenter;
@@ -79,7 +79,7 @@ final class Session{
 		private readonly PeerConnection $peerConnection,
 		array $channels,
 		private readonly string $networkId,
-		private readonly ?VerifiedIdentity $identity,
+		private readonly ?PeerIdentity $identity,
 		private readonly Segmenter $segmenter = new Segmenter(),
 		int $maxPayloadSize = Segmenter::MAX_PAYLOAD_SIZE,
 		private readonly int $maxReceiveQueueSize = self::DEFAULT_MAX_RECEIVE_QUEUE_SIZE,
@@ -102,7 +102,13 @@ final class Session{
 
 	public function getNetworkId() : string{ return $this->networkId; }
 
-	public function getIdentity() : ?VerifiedIdentity{ return $this->identity; }
+	/**
+	 * Returns the verified cryptographic identity of the peer, or null if connected without an assertion.
+	 *
+	 * Note that this represents a cryptographic key rather than an authenticated player account.
+	 * See {@link PeerIdentity} for details on player verification.
+	 */
+	public function getIdentity() : ?PeerIdentity{ return $this->identity; }
 
 	public function getRemoteAddress() : ?string{
 		return $this->closed ? null : $this->peerConnection->getRemoteAddress();

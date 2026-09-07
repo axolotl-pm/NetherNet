@@ -18,7 +18,7 @@ use pmmp\webrtc\DataChannel;
 use pmmp\webrtc\IceCandidate;
 use pmmp\webrtc\PeerConnection;
 use pmmp\webrtc\WebRtcException;
-use pocketmine\nethernet\identity\VerifiedIdentity;
+use pocketmine\nethernet\identity\PeerIdentity;
 use pocketmine\nethernet\session\Reliability;
 
 /**
@@ -45,7 +45,7 @@ final class WebRtcNegotiation implements Negotiation{
 	public function __construct(
 		private readonly PeerConnection $peerConnection,
 		private readonly string $networkId,
-		private readonly ?VerifiedIdentity $identity,
+		private readonly ?PeerIdentity $identity,
 		private readonly CandidateMode $candidateMode,
 		private float $deadline,
 		private readonly int $maxRemoteCandidates = WebRtcNegotiator::DEFAULT_MAX_REMOTE_CANDIDATES

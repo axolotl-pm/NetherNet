@@ -16,7 +16,7 @@ namespace pocketmine\nethernet\session;
 
 use pmmp\webrtc\DataChannel;
 use pmmp\webrtc\PeerConnection;
-use pocketmine\nethernet\identity\VerifiedIdentity;
+use pocketmine\nethernet\identity\PeerIdentity;
 use pocketmine\nethernet\ServerEventListener;
 use pocketmine\nethernet\session\framing\Segmenter;
 use function array_values;
@@ -56,7 +56,7 @@ final class SessionManager{
 	 * @param DataChannel[] $channels Keyed by {@link Reliability} case name.
 	 * @phpstan-param array<string, DataChannel> $channels
 	 */
-	public function open(PeerConnection $peerConnection, array $channels, string $networkId, ?VerifiedIdentity $identity) : Session{
+	public function open(PeerConnection $peerConnection, array $channels, string $networkId, ?PeerIdentity $identity) : Session{
 		$session = new Session(
 			$this->nextSessionId++,
 			$peerConnection,
