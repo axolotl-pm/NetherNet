@@ -121,6 +121,10 @@ final class SessionManager{
 
 	private function drain(Session $session) : void{
 		for($i = 0; $i < self::MAX_MESSAGES_PER_TICK; ++$i){
+			if(!$this->listener->canAcceptPackets()){
+				return;
+			}
+
 			try{
 				$message = $session->receive();
 			}catch(SessionException $e){

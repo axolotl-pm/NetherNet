@@ -29,6 +29,14 @@ interface ServerEventListener{
 	public function onSessionOpen(Session $session) : void;
 
 	/**
+	 * Called before each incoming message is read, to ask whether the listener still has room for it.
+	 *
+	 * Returning false leaves the message in the peer connection's receive queue, where it counts towards
+	 * the session's own receive limits.
+	 */
+	public function canAcceptPackets() : bool;
+
+	/**
 	 * Called when a message is received from a connected client.
 	 */
 	public function onPacketReceive(Session $session, string $payload, Reliability $reliability) : void;
