@@ -18,6 +18,7 @@ use pmmp\webrtc\ConnectionState;
 use pmmp\webrtc\GatheringState;
 use pmmp\webrtc\PeerConnection;
 use pmmp\webrtc\WebRtcException;
+use pocketmine\nethernet\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\crypto\CryptoException;
 use pocketmine\nethernet\identity\IdentityException;
 use pocketmine\nethernet\identity\IdentityProvider;
@@ -55,17 +56,19 @@ final class WebRtcNegotiator implements Negotiator{
 	private bool $closed = false;
 
 	/**
-	 * @param float $gatheringTimeout    Timeout in seconds for ICE candidate gathering (Full ICE).
-	 * @param float $channelTimeout      Timeout in seconds for remote peer to open data channels (`ReliableDataChannel` and `UnreliableDataChannel`).
-	 * @param int   $maxRemoteCandidates ICE candidates a peer may hand this connection, counted in the offer and by trickle on their own.
+	 * @param ConnectionBudgetConfiguration $budget              Resource limits and queue thresholds for peer connections.
+	 * @param float                         $gatheringTimeout    Timeout in seconds for ICE candidate gathering (Full ICE).
+	 * @param float                         $channelTimeout      Timeout in seconds for remote peer to open data channels (`ReliableDataChannel` and `UnreliableDataChannel`).
+	 * @param int                           $maxRemoteCandidates Maximum ICE candidates a peer may offer or trickle per connection.
 	 */
 	public function __construct(
 		private readonly IdentityProvider $identityProvider,
 		private readonly IdentityVerifier $identityVerifier,
-		private readonly PeerConnectionFactory $peerConnectionFactory = new ConfiguredPeerConnectionFactory(),
-		private readonly float $gatheringTimeout = 15.0,
-		private readonly float $channelTimeout = 5.0,
-		private readonly int $maxRemoteCandidates = self::DEFAULT_MAX_REMOTE_CANDIDATES,
+		private readonly PeerConnectionFactory $peerConnectionFactory,
+		private readonly ConnectionBudgetConfiguration $budget,
+		private readonly float $gatheringTimeout,
+		private readonly float $channelTimeout,
+		private readonly int $maxRemoteCandidates,
 		private readonly ?\Logger $logger = null
 	){
 		if($gatheringTimeout <= 0.0 || $channelTimeout <= 0.0){
@@ -101,7 +104,7 @@ final class WebRtcNegotiator implements Negotiator{
 		}
 
 		try{
-			$peerConnection = $this->peerConnectionFactory->create();
+			$peerConnection = $this->peerConnectionFactory->create($this->budget);
 		}catch(WebRtcException $e){
 			throw new NegotiationException("Could not create a peer connection: " . $e->getMessage(), ErrorCode::FAILED_TO_CREATE_PEER_CONNECTION, $e);
 		}

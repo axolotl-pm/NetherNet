@@ -16,6 +16,7 @@ namespace pocketmine\nethernet\negotiation;
 
 use pmmp\webrtc\PeerConnection;
 use pmmp\webrtc\WebRtcException;
+use pocketmine\nethernet\ConnectionBudgetConfiguration;
 
 /**
  * Factory interface for creating configured WebRTC PeerConnection instances.
@@ -23,7 +24,9 @@ use pmmp\webrtc\WebRtcException;
 interface PeerConnectionFactory{
 
 	/**
+	 * Creates a WebRTC PeerConnection configured with the given budget limits.
+	 *
 	 * @throws WebRtcException
 	 */
-	public function create() : PeerConnection;
+	public function create(ConnectionBudgetConfiguration $budget) : PeerConnection;
 }

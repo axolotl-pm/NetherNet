@@ -16,6 +16,7 @@ namespace pocketmine\nethernet\session;
 
 use pmmp\webrtc\DataChannel;
 use pmmp\webrtc\PeerConnection;
+use pocketmine\nethernet\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\identity\PeerIdentity;
 use pocketmine\nethernet\ServerEventListener;
 use pocketmine\nethernet\session\framing\Segmenter;
@@ -40,15 +41,15 @@ final class SessionManager{
 
 	private int $nextSessionId = 0;
 
+	private readonly Segmenter $segmenter;
+
 	public function __construct(
 		private readonly ServerEventListener $listener,
-		private readonly Segmenter $segmenter = new Segmenter(),
-		private readonly int $maxPayloadSize = Segmenter::MAX_PAYLOAD_SIZE,
-		private readonly int $maxReceiveQueueSize = Session::DEFAULT_MAX_RECEIVE_QUEUE_SIZE,
-		private readonly int $maxReceiveQueueMessages = Session::DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES,
-		private readonly int $maxSendQueueSize = Session::DEFAULT_MAX_SEND_QUEUE_SIZE,
+		private readonly ConnectionBudgetConfiguration $budget,
 		private readonly ?\Logger $logger = null
-	){}
+	){
+		$this->segmenter = $budget->createSegmenter();
+	}
 
 	/**
 	 * Registers and initializes a new client session from an established connection.
@@ -64,10 +65,7 @@ final class SessionManager{
 			$networkId,
 			$identity,
 			self::segmenterFor($channels, $this->segmenter),
-			$this->maxPayloadSize,
-			$this->maxReceiveQueueSize,
-			$this->maxReceiveQueueMessages,
-			$this->maxSendQueueSize
+			$this->budget
 		);
 		$this->sessions[$session->getId()] = $session;
 

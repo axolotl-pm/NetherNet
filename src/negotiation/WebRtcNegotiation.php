@@ -48,7 +48,7 @@ final class WebRtcNegotiation implements Negotiation{
 		private readonly ?PeerIdentity $identity,
 		private readonly CandidateMode $candidateMode,
 		private float $deadline,
-		private readonly int $maxRemoteCandidates = WebRtcNegotiator::DEFAULT_MAX_REMOTE_CANDIDATES
+		private readonly int $maxRemoteCandidates
 	){}
 
 	public function getAnswer() : ?string{ return $this->answer; }

@@ -46,13 +46,12 @@ final class NetherNetServer{
 	 * Creates a server instance using the provided configuration and event listener.
 	 */
 	public static function create(ServerConfiguration $configuration, ServerEventListener $listener) : self{
-		$segmenter = $configuration->createSegmenter();
-
 		return new self(
 			new WebRtcNegotiator(
 				$configuration->identityProvider,
 				$configuration->identityVerifier,
 				$configuration->peerConnectionFactory,
+				$configuration->budget,
 				$configuration->gatheringTimeout,
 				$configuration->channelTimeout,
 				$configuration->maxRemoteCandidates,
@@ -60,11 +59,7 @@ final class NetherNetServer{
 			),
 			new SessionManager(
 				$listener,
-				$segmenter,
-				$configuration->maxPayloadSize,
-				$configuration->maxReceiveQueueSize,
-				$configuration->maxReceiveQueueMessages,
-				$configuration->maxSendQueueSize,
+				$configuration->budget,
 				$configuration->logger
 			),
 			$configuration->logger

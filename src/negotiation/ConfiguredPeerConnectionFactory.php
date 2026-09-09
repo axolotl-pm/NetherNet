@@ -17,8 +17,7 @@ namespace pocketmine\nethernet\negotiation;
 use pmmp\webrtc\IceServer;
 use pmmp\webrtc\PeerConnection;
 use pmmp\webrtc\PeerConnectionOptions;
-use pocketmine\nethernet\session\framing\Segmenter;
-use pocketmine\nethernet\session\Session;
+use pocketmine\nethernet\ConnectionBudgetConfiguration;
 use function count;
 
 /**
@@ -26,31 +25,19 @@ use function count;
  */
 final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 
-	public const DEFAULT_MAX_MESSAGE_SIZE = Segmenter::MAX_SEGMENT_PAYLOAD_SIZE + 1;
-
-	private readonly PeerConnectionOptions $options;
-
 	/**
 	 * @param IceServer[] $iceServers
 	 * @phpstan-param list<IceServer> $iceServers
 	 *
-	 * @param string|null $bindAddress             Local address to bind ICE sockets, or null for all interfaces.
-	 * @param int|null    $portRangeBegin          Start of UDP port range.
-	 * @param int|null    $portRangeEnd            End of UDP port range.
-	 * @param int         $maxMessageSize          Maximum advertised SCTP message size.
-	 * @param int         $maxReceiveQueueSize     Maximum receive queue size in bytes.
-	 * @param int         $maxReceiveQueueMessages Maximum receive queue message count.
-	 * @param int         $maxSendQueueSize        Maximum send queue size in bytes.
+	 * @param string|null $bindAddress    Local address to bind ICE sockets, or null for all interfaces.
+	 * @param int|null    $portRangeBegin Start of UDP port range.
+	 * @param int|null    $portRangeEnd   End of UDP port range.
 	 */
 	public function __construct(
-		array $iceServers = [],
-		?string $bindAddress = null,
-		?int $portRangeBegin = null,
-		?int $portRangeEnd = null,
-		int $maxMessageSize = self::DEFAULT_MAX_MESSAGE_SIZE,
-		int $maxReceiveQueueSize = Session::DEFAULT_MAX_RECEIVE_QUEUE_SIZE * 2,
-		int $maxReceiveQueueMessages = Session::DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES * 2,
-		int $maxSendQueueSize = Session::DEFAULT_MAX_SEND_QUEUE_SIZE * 2
+		private readonly array $iceServers = [],
+		private readonly ?string $bindAddress = null,
+		private readonly ?int $portRangeBegin = null,
+		private readonly ?int $portRangeEnd = null
 	){
 		if(($portRangeBegin === null) !== ($portRangeEnd === null)){
 			throw new \InvalidArgumentException("Port range needs both a start and an end, or neither");
@@ -58,35 +45,28 @@ final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 		if($portRangeBegin !== null && $portRangeEnd !== null && $portRangeBegin > $portRangeEnd){
 			throw new \InvalidArgumentException("Port range start $portRangeBegin is above its end $portRangeEnd");
 		}
-		if($maxMessageSize < 2 || $maxMessageSize > self::DEFAULT_MAX_MESSAGE_SIZE){
-			throw new \InvalidArgumentException("Maximum message size must be between 2 and " . self::DEFAULT_MAX_MESSAGE_SIZE . ", got $maxMessageSize");
-		}
-
-		/*
-		 * Higher than per-session limits so sessions close with a reason
-		 * before the native extension rejects them.
-		 */
-		$options = PeerConnectionOptions::create()
-			->setMaxMessageSize($maxMessageSize)
-			->setMaxReceiveQueueSize($maxReceiveQueueSize)
-			->setMaxReceiveQueueMessages($maxReceiveQueueMessages)
-			->setMaxSendQueueSize($maxSendQueueSize)
-			->setIceTcpEnabled(false);
-
-		if($bindAddress !== null){
-			$options = $options->setBindAddress($bindAddress);
-		}
-		if($portRangeBegin !== null && $portRangeEnd !== null){
-			$options = $options->setPortRange($portRangeBegin, $portRangeEnd);
-		}
-		if(count($iceServers) > 0){
-			$options = $options->setIceServers(...$iceServers);
-		}
-
-		$this->options = $options;
 	}
 
-	public function create() : PeerConnection{
-		return new PeerConnection($this->options);
+	public function create(ConnectionBudgetConfiguration $budget) : PeerConnection{
+		// Options are created per connection because PeerConnectionOptions setters mutate the instance in place.
+		$options = PeerConnectionOptions::create()
+			->setMaxMessageSize($budget->maxMessageSize)
+			->setMaxReceiveQueueSize($budget->getNativeReceiveQueueSize())
+			->setMaxReceiveQueueMessages($budget->getNativeReceiveQueueMessages())
+			->setMaxSendQueueSize($budget->getNativeSendQueueSize())
+			->setMaxPendingDataChannels($budget->maxPendingDataChannels)
+			->setIceTcpEnabled(false);
+
+		if($this->bindAddress !== null){
+			$options->setBindAddress($this->bindAddress);
+		}
+		if($this->portRangeBegin !== null && $this->portRangeEnd !== null){
+			$options->setPortRange($this->portRangeBegin, $this->portRangeEnd);
+		}
+		if(count($this->iceServers) > 0){
+			$options->setIceServers(...$this->iceServers);
+		}
+
+		return new PeerConnection($options);
 	}
 }

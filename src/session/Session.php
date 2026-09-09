@@ -18,6 +18,7 @@ use pmmp\webrtc\ConnectionState;
 use pmmp\webrtc\DataChannel;
 use pmmp\webrtc\PeerConnection;
 use pmmp\webrtc\WebRtcException;
+use pocketmine\nethernet\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\identity\PeerIdentity;
 use pocketmine\nethernet\session\framing\Assembler;
 use pocketmine\nethernet\session\framing\FramingException;
@@ -29,21 +30,6 @@ use function microtime;
  * Represents a connected client session over WebRTC data channels.
  */
 final class Session{
-
-	/**
-	 * Default maximum unread incoming bytes before dropping a session.
-	 */
-	public const DEFAULT_MAX_RECEIVE_QUEUE_SIZE = 8388608;
-
-	/**
-	 * Default maximum unread incoming messages before dropping a session.
-	 */
-	public const DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES = 4096;
-
-	/**
-	 * Default maximum queued outgoing bytes before dropping a session.
-	 */
-	public const DEFAULT_MAX_SEND_QUEUE_SIZE = 8388608;
 
 	/**
 	 * Timeout in seconds to flush queued outgoing data before disconnecting.
@@ -80,18 +66,15 @@ final class Session{
 		array $channels,
 		private readonly string $networkId,
 		private readonly ?PeerIdentity $identity,
-		private readonly Segmenter $segmenter = new Segmenter(),
-		int $maxPayloadSize = Segmenter::MAX_PAYLOAD_SIZE,
-		private readonly int $maxReceiveQueueSize = self::DEFAULT_MAX_RECEIVE_QUEUE_SIZE,
-		private readonly int $maxReceiveQueueMessages = self::DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES,
-		private readonly int $maxSendQueueSize = self::DEFAULT_MAX_SEND_QUEUE_SIZE
+		private readonly Segmenter $segmenter,
+		private readonly ConnectionBudgetConfiguration $budget
 	){
 		$assemblers = [];
 		foreach(Reliability::cases() as $reliability){
 			if(!isset($channels[$reliability->name])){
 				throw new \InvalidArgumentException("Missing the " . $reliability->getChannelLabel() . " channel");
 			}
-			$assemblers[$reliability->name] = new Assembler($reliability->isFragmentationSupported(), $maxPayloadSize);
+			$assemblers[$reliability->name] = new Assembler($reliability->isFragmentationSupported(), $budget->maxPayloadSize);
 		}
 
 		$this->channels = $channels;
@@ -218,17 +201,17 @@ final class Session{
 			$queuedMessages += $channel->getQueuedMessageCount();
 			$buffered += $channel->getBufferedAmount();
 		}
-		if($queuedBytes > $this->maxReceiveQueueSize){
+		if($queuedBytes > $this->budget->maxReceiveQueueSize){
 			$this->close(DisconnectReason::RECEIVE_QUEUE_TOO_MANY_BYTES);
 
 			return false;
 		}
-		if($queuedMessages > $this->maxReceiveQueueMessages){
+		if($queuedMessages > $this->budget->maxReceiveQueueMessages){
 			$this->close(DisconnectReason::RECEIVE_QUEUE_TOO_MANY_MESSAGES);
 
 			return false;
 		}
-		if($buffered > $this->maxSendQueueSize){
+		if($buffered > $this->budget->maxSendQueueSize){
 			$this->close(DisconnectReason::SEND_QUEUE_TOO_MANY_BYTES);
 
 			return false;
