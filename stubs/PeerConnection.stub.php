@@ -12,6 +12,9 @@ namespace pmmp\webrtc;
  */
 final class PeerConnection
 {
+    /**
+     * @throws WebRtcException if ICE UDP mux is enabled with TURN servers
+     */
     public function __construct(PeerConnectionOptions $options) {}
 
     /**

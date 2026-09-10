@@ -86,6 +86,17 @@ final class PeerConnectionOptions
     /** Whether to gather TCP ICE candidates. Disabled by default. */
     public function setIceTcpEnabled(bool $enable): PeerConnectionOptions {}
 
+    /**
+     * Share a single UDP socket across all connections instead of binding a
+     * separate socket per connection. Disabled by default.
+     *
+     * When enabled, all connections share the same port, allowing multiple
+     * connections through a single forwarded port.
+     *
+     * TURN servers and ICE TCP are not supported in this mode.
+     */
+    public function setIceUdpMuxEnabled(bool $enable): PeerConnectionOptions {}
+
     /** Returns 0 if no explicit limit was set. */
     public function getMaxMessageSize(): int {}
 
@@ -105,4 +116,6 @@ final class PeerConnectionOptions
     public function getKeyPemPass(): ?string {}
 
     public function isIceTcpEnabled(): bool {}
+
+    public function isIceUdpMuxEnabled(): bool {}
 }

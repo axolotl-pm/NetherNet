@@ -29,21 +29,37 @@ final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 	 * @param IceServer[] $iceServers
 	 * @phpstan-param list<IceServer> $iceServers
 	 *
-	 * @param string|null $bindAddress    Local address to bind ICE sockets, or null for all interfaces.
-	 * @param int|null    $portRangeBegin Start of UDP port range.
-	 * @param int|null    $portRangeEnd   End of UDP port range.
+	 * @param string|null $bindAddress      Local address to bind ICE sockets, or null for all interfaces.
+	 * @param int|null    $portRangeBegin   Start of UDP port range.
+	 * @param int|null    $portRangeEnd     End of UDP port range.
+	 * @param bool        $iceUdpMuxEnabled Share one UDP socket across every connection, so a single forwarded
+	 *                                      port carries all of them. Rules out TURN.
 	 */
 	public function __construct(
 		private readonly array $iceServers = [],
 		private readonly ?string $bindAddress = null,
 		private readonly ?int $portRangeBegin = null,
-		private readonly ?int $portRangeEnd = null
+		private readonly ?int $portRangeEnd = null,
+		private readonly bool $iceUdpMuxEnabled = false
 	){
 		if(($portRangeBegin === null) !== ($portRangeEnd === null)){
 			throw new \InvalidArgumentException("Port range needs both a start and an end, or neither");
 		}
+		if($portRangeBegin !== null && ($portRangeBegin < 1 || $portRangeBegin > 65535)){
+			throw new \InvalidArgumentException("Port range start must be between 1 and 65535, got $portRangeBegin");
+		}
+		if($portRangeEnd !== null && ($portRangeEnd < 1 || $portRangeEnd > 65535)){
+			throw new \InvalidArgumentException("Port range end must be between 1 and 65535, got $portRangeEnd");
+		}
 		if($portRangeBegin !== null && $portRangeEnd !== null && $portRangeBegin > $portRangeEnd){
 			throw new \InvalidArgumentException("Port range start $portRangeBegin is above its end $portRangeEnd");
+		}
+		if($iceUdpMuxEnabled){
+			foreach($iceServers as $iceServer){
+				if($iceServer->isTurn()){
+					throw new \InvalidArgumentException("TURN servers cannot be used with ICE UDP mux");
+				}
+			}
 		}
 	}
 
@@ -55,7 +71,8 @@ final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 			->setMaxReceiveQueueMessages($budget->getNativeReceiveQueueMessages())
 			->setMaxSendQueueSize($budget->getNativeSendQueueSize())
 			->setMaxPendingDataChannels($budget->maxPendingDataChannels)
-			->setIceTcpEnabled(false);
+			->setIceTcpEnabled(false)
+			->setIceUdpMuxEnabled($this->iceUdpMuxEnabled);
 
 		if($this->bindAddress !== null){
 			$options->setBindAddress($this->bindAddress);
