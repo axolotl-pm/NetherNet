@@ -32,6 +32,7 @@ final class FakeNegotiator implements Negotiator{
 	public ?string $lastOffer = null;
 	public ?string $lastNetworkId = null;
 	public ?CandidateMode $lastMode = null;
+	public ?string $lastPeerAddress = null;
 
 	/**
 	 * @param string[] $localCandidates
@@ -43,10 +44,11 @@ final class FakeNegotiator implements Negotiator{
 		private readonly ?ErrorCode $failWith = null
 	){}
 
-	public function beginNegotiation(string $offerSdp, string $networkId, CandidateMode $candidateMode = CandidateMode::BUNDLED) : Negotiation{
+	public function beginNegotiation(string $offerSdp, string $networkId, CandidateMode $candidateMode = CandidateMode::BUNDLED, ?string $peerAddress = null) : Negotiation{
 		$this->lastOffer = $offerSdp;
 		$this->lastNetworkId = $networkId;
 		$this->lastMode = $candidateMode;
+		$this->lastPeerAddress = $peerAddress;
 
 		$negotiation = new FakeNegotiation($this->answer, $this->localCandidates);
 		if($this->failWith !== null){

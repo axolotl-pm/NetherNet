@@ -171,6 +171,8 @@ final class HttpSignalingTest extends TestCase{
 		self::assertSame("12345", $negotiator->lastNetworkId);
 		//a single request and response cannot carry a candidate afterwards
 		self::assertSame(CandidateMode::BUNDLED, $negotiator->lastMode);
+		//the offer only names the peer's private addresses; the one it signaled from is what a relay needs
+		self::assertSame("127.0.0.1", $negotiator->lastPeerAddress);
 	}
 
 	public function testUnknownPathIsNotFound() : void{

@@ -24,10 +24,13 @@ interface Negotiator{
 	 *
 	 * @param string        $networkId     Peer network identifier.
 	 * @param CandidateMode $candidateMode Strategy for candidate delivery.
+	 * @param string|null   $peerAddress   IP address the offer was received from, if the signaling transport
+	 *                                     knows it. It is offered to the peer connection as a candidate so
+	 *                                     that a peer behind NAT can be reached through a TURN relay.
 	 *
 	 * @throws NegotiationException if the offer cannot be accepted.
 	 */
-	public function beginNegotiation(string $offerSdp, string $networkId, CandidateMode $candidateMode = CandidateMode::BUNDLED) : Negotiation;
+	public function beginNegotiation(string $offerSdp, string $networkId, CandidateMode $candidateMode = CandidateMode::BUNDLED, ?string $peerAddress = null) : Negotiation;
 
 	/**
 	 * Advances active handshakes and checks for timeouts.

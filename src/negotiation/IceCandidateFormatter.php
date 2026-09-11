@@ -14,10 +14,13 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\negotiation;
 
+use pocketmine\nethernet\sdp\SessionDescription;
+use function array_merge;
 use function count;
 use function explode;
 use function implode;
 use function str_starts_with;
+use function strtolower;
 use function substr;
 
 /**
@@ -27,7 +30,51 @@ final class IceCandidateFormatter{
 
 	private const COMPONENT = "1";
 
+	/**
+	 * RFC 8445 section 5.1.2.1 priority for a server-reflexive candidate
+	 */
+	private const SERVER_REFLEXIVE_PRIORITY = (100 << 24) + (65535 << 8) + 255;
+
 	private function __construct(){}
+
+	/**
+	 * Builds a server-reflexive candidate
+	 *
+	 * @return string|null null when the offer already carries the address, or has no UDP host candidate.
+	 */
+	public static function signalingPeer(SessionDescription $offer, string $address) : ?string{
+		$port = null;
+		foreach(array_merge($offer->getSessionAttributeValues("candidate"), $offer->getMediaAttributeValues("candidate")) as $candidate){
+			$parts = explode(" ", $candidate);
+			if(count($parts) < 8 || $parts[6] !== "typ"){
+				continue;
+			}
+			if($parts[4] === $address){
+				return null;
+			}
+			if($port === null && $parts[7] === "host" && strtolower($parts[2]) === "udp"){
+				$port = $parts[5];
+			}
+		}
+		if($port === null){
+			return null;
+		}
+
+		return implode(" ", [
+			"candidate:signaling",
+			self::COMPONENT,
+			"udp",
+			(string) self::SERVER_REFLEXIVE_PRIORITY,
+			$address,
+			$port,
+			"typ",
+			"srflx",
+			"raddr",
+			"0.0.0.0",
+			"rport",
+			"0"
+		]);
+	}
 
 	/**
 	 * @param string $ufrag Local ICE username fragment.

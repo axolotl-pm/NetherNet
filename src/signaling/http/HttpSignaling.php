@@ -187,11 +187,14 @@ final class HttpSignaling implements SignalingInterface{
 
 		$peerAddress = "";
 		$peerPort = 0;
-		$peerName = @socket_getpeername($connection, $peerAddress, $peerPort) ? "$peerAddress:$peerPort" : "unknown";
+		if(!@socket_getpeername($connection, $peerAddress, $peerPort)){
+			$peerAddress = "";
+			$peerPort = 0;
+		}
 
 		$stream = socket_export_stream($connection);
 		if($stream === false){
-			$this->logger?->debug("Could not read the accepted socket as a stream; dropping $peerName");
+			$this->logger?->debug("Could not read the accepted socket as a stream; dropping " . ($peerAddress === "" ? "unknown" : "$peerAddress:$peerPort"));
 			socket_close($connection);
 
 			return null;
@@ -201,7 +204,8 @@ final class HttpSignaling implements SignalingInterface{
 		$connectionState = new HttpConnection(
 			$stream,
 			$connection,
-			$peerName,
+			$peerAddress,
+			$peerPort,
 			$now + self::HEAD_TIMEOUT,
 			$now + self::BODY_TIMEOUT
 		);
@@ -241,7 +245,7 @@ final class HttpSignaling implements SignalingInterface{
 				continue;
 			}
 
-			$this->logger?->debug("Signaling connection opened from " . $connection->peerName);
+			$this->logger?->debug("Signaling connection opened from " . $connection->peerName());
 			$this->connections[$this->nextConnectionId++] = $connection;
 		}
 
@@ -255,10 +259,10 @@ final class HttpSignaling implements SignalingInterface{
 			try{
 				$this->advance($connection, $now);
 			}catch(HttpException $e){
-				$this->logger?->debug($connection->peerName . ": " . $e->getMessage());
+				$this->logger?->debug($connection->peerName() . ": " . $e->getMessage());
 				$this->respond($connection, $e->getStatusCode(), "");
 			}catch(\Throwable $e){
-				$this->logger?->debug($connection->peerName . ": unhandled " . $e::class . ": " . $e->getMessage());
+				$this->logger?->debug($connection->peerName() . ": unhandled " . $e::class . ": " . $e->getMessage());
 				$this->respond($connection, 500, "");
 			}
 
@@ -392,7 +396,7 @@ final class HttpSignaling implements SignalingInterface{
 					return;
 				}
 				if($negotiation->isFailed()){
-					$this->logger?->debug($connection->peerName . ": negotiation failed: " . ($negotiation->getFailureReason() ?? "no reason given"));
+					$this->logger?->debug($connection->peerName() . ": negotiation failed: " . ($negotiation->getFailureReason() ?? "no reason given"));
 					$this->respond($connection, 500, (string) $negotiation->getFailureCode()->value, self::CONTENT_TYPE_TEXT);
 
 					return;
@@ -405,7 +409,7 @@ final class HttpSignaling implements SignalingInterface{
 			case HttpConnectionState::WRITING:
 				$this->flush($connection);
 				if($connection->state === HttpConnectionState::WRITING && $now > $connection->writeDeadline){
-					$this->logger?->debug($connection->peerName . ": timed out sending the response");
+					$this->logger?->debug($connection->peerName() . ": timed out sending the response");
 					$connection->state = HttpConnectionState::DONE;
 				}
 				return;
@@ -471,7 +475,11 @@ final class HttpSignaling implements SignalingInterface{
 		}
 
 		try{
-			$connection->negotiation = $this->negotiator->beginNegotiation($body, self::networkIdOf($path));
+			$connection->negotiation = $this->negotiator->beginNegotiation(
+				$body,
+				self::networkIdOf($path),
+				peerAddress: $connection->peerAddress !== "" ? $connection->peerAddress : null
+			);
 		}catch(NegotiationException $e){
 			throw new HttpException(400, $e->getMessage());
 		}
@@ -509,7 +517,7 @@ final class HttpSignaling implements SignalingInterface{
 		}
 
 		$this->logger?->debug(
-			$connection->peerName . ": " .
+			$connection->peerName() . ": " .
 			($connection->request === null ? "<unparsed request>" : $connection->request->method . " " . $connection->request->getPath()) .
 			" -> $statusCode " . self::getReasonPhrase($statusCode)
 		);
@@ -647,7 +655,7 @@ final class HttpSignaling implements SignalingInterface{
 		}
 
 		if($connection->input !== ""){
-			$this->logger?->debug($connection->peerName . ": closed the connection after " . strlen($connection->input) . " bytes of a request");
+			$this->logger?->debug($connection->peerName() . ": closed the connection after " . strlen($connection->input) . " bytes of a request");
 		}
 		$connection->state = HttpConnectionState::DONE;
 
@@ -682,7 +690,7 @@ final class HttpSignaling implements SignalingInterface{
 			return false;
 		}
 
-		$this->logger?->debug("Dropping the stalest signaling connection (" . $this->connections[$stalestId]->peerName . ") to make room");
+		$this->logger?->debug("Dropping the stalest signaling connection (" . $this->connections[$stalestId]->peerName() . ") to make room");
 		$this->disconnect($this->connections[$stalestId]);
 		unset($this->connections[$stalestId]);
 

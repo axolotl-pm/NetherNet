@@ -79,7 +79,7 @@ final class WebRtcNegotiator implements Negotiator{
 		}
 	}
 
-	public function beginNegotiation(string $offerSdp, string $networkId, CandidateMode $candidateMode = CandidateMode::BUNDLED) : Negotiation{
+	public function beginNegotiation(string $offerSdp, string $networkId, CandidateMode $candidateMode = CandidateMode::BUNDLED, ?string $peerAddress = null) : Negotiation{
 		if($this->closed){
 			throw new NegotiationException("Negotiator is shut down", ErrorCode::NO_SIGNALING_CHANNEL);
 		}
@@ -127,7 +127,24 @@ final class WebRtcNegotiator implements Negotiator{
 		);
 		$this->negotiations[$this->nextNegotiationId++] = $negotiation;
 
+		if($peerAddress !== null){
+			$this->addSignalingPeerCandidate($negotiation, $offer, $peerAddress);
+		}
+
 		return $negotiation;
+	}
+
+	private function addSignalingPeerCandidate(WebRtcNegotiation $negotiation, SessionDescription $offer, string $peerAddress) : void{
+		$candidate = IceCandidateFormatter::signalingPeer($offer, $peerAddress);
+		if($candidate === null){
+			return;
+		}
+
+		try{
+			$negotiation->addRemoteCandidate($candidate);
+		}catch(NegotiationException $e){
+			$this->logger?->debug("Signaling peer candidate for " . $negotiation->getNetworkId() . " was rejected: " . $e->getMessage());
+		}
 	}
 
 	public function tick() : void{
