@@ -41,6 +41,7 @@ use const DIRECTORY_SEPARATOR;
 use const OPENSSL_KEYTYPE_RSA;
 use const STREAM_CLIENT_CONNECT;
 use const STREAM_CRYPTO_METHOD_TLS_CLIENT;
+use const STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT;
 
 /**
  * How the endpoint behaves when the scheme a peer used is not the one being
@@ -259,6 +260,40 @@ final class HttpSignalingTlsTest extends TestCase{
 		}
 
 		self::fail("the TLS handshake never completed: " . implode(" | ", $logger->messages));
+	}
+
+	/**
+	 * Verifies that requests over TLS 1.3 succeed without misidentifying subsequent handshake records as plain HTTP.
+	 */
+	public function testRequestOverTls13IsAnswered() : void{
+		$logger = new RecordingLogger();
+		$port = $this->start(["local_cert" => $this->certificate()], $logger);
+
+		$client = $this->connect($port, tls: true);
+
+		$established = false;
+		for($attempt = 0; $attempt < 300 && !$established; ++$attempt){
+			$this->signaling?->tick();
+			$result = @stream_socket_enable_crypto($client, true, STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT);
+			self::assertNotFalse($result, "the client handshake failed outright: " . implode(" | ", $logger->messages));
+			$established = $result === true;
+			usleep(2000);
+		}
+		self::assertTrue($established, "the TLS handshake never completed: " . implode(" | ", $logger->messages));
+
+		fwrite($client, "GET /v1/join HTTP/1.1" . self::CRLF . "Host: localhost" . self::CRLF . self::CRLF);
+
+		$response = "";
+		for($attempt = 0; $attempt < 300 && !str_contains($response, self::CRLF . self::CRLF); ++$attempt){
+			$this->signaling?->tick();
+			$chunk = fread($client, 65536);
+			if($chunk !== false){
+				$response .= $chunk;
+			}
+			usleep(2000);
+		}
+
+		self::assertStringStartsWith("HTTP/1.1 200 ", $response, implode(" | ", $logger->messages));
 	}
 
 	/** A certificate good enough to get the listener as far as a handshake. */

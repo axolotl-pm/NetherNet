@@ -109,6 +109,7 @@ final class HttpSignaling implements SignalingInterface{
 	/**
 	 * @param array<string, mixed>|null $tlsContext SSL context options for HTTPS support (TLS trust anchor).
 	 * @param ServerStatusProvider|null $statusProvider Provider for capability probe (`GET /v1/join`) responses.
+	 * @param ReverseProxy|null         $reverseProxy Reverse proxy configuration for resolving client IP addresses.
 	 */
 	public function __construct(
 		private readonly Negotiator $negotiator,
@@ -117,7 +118,8 @@ final class HttpSignaling implements SignalingInterface{
 		private readonly ?array $tlsContext = null,
 		private readonly ?\Logger $logger = null,
 		private readonly int $maxConnections = self::DEFAULT_MAX_CONNECTIONS,
-		private readonly ?ServerStatusProvider $statusProvider = null
+		private readonly ?ServerStatusProvider $statusProvider = null,
+		private readonly ?ReverseProxy $reverseProxy = null
 	){
 		if($maxConnections < 1){
 			throw new \InvalidArgumentException("Maximum connections must be positive, got $maxConnections");
@@ -296,21 +298,25 @@ final class HttpSignaling implements SignalingInterface{
 	private function advance(HttpConnection $connection, float $now) : void{
 		switch($connection->state){
 			case HttpConnectionState::HANDSHAKE:
-				$opening = self::peekFirstByte($connection);
-				if($opening === null){
-					if($now > $connection->headDeadline){
-						throw new HttpException(408, "Timed out waiting for a TLS handshake");
+				if(!$connection->handshakeStarted){
+					$opening = self::peekFirstByte($connection);
+					if($opening === null){
+						if($now > $connection->headDeadline){
+							throw new HttpException(408, "Timed out waiting for a TLS handshake");
+						}
+						$this->checkPeerGone($connection);
+
+						return;
 					}
-					$this->checkPeerGone($connection);
+					// Handshake record begins with 0x16; redirect plain HTTP attempts
+					if($opening !== "\x16"){
+						$connection->redirectToTls = true;
+						$connection->state = HttpConnectionState::READING_HEAD;
 
-					return;
-				}
-				// Handshake record begins with 0x16; redirect plain HTTP attempts
-				if($opening !== "\x16"){
-					$connection->redirectToTls = true;
-					$connection->state = HttpConnectionState::READING_HEAD;
-
-					return;
+						return;
+					}
+					// Once the TLS handshake begins, subsequent records must not be checked for plain HTTP.
+					$connection->handshakeStarted = true;
 				}
 
 				$result = self::enableCrypto($connection->stream, $warning);
@@ -474,12 +480,16 @@ final class HttpSignaling implements SignalingInterface{
 			return;
 		}
 
+		$peerAddress = $connection->peerAddress !== "" ? $connection->peerAddress : null;
+		if($peerAddress !== null && $this->reverseProxy !== null && $this->reverseProxy->trusts($peerAddress)){
+			$peerAddress = $this->reverseProxy->clientAddress($request);
+			if($peerAddress === null){
+				$this->logger?->debug($connection->peerName() . ": no client address in the proxy headers");
+			}
+		}
+
 		try{
-			$connection->negotiation = $this->negotiator->beginNegotiation(
-				$body,
-				self::networkIdOf($path),
-				peerAddress: $connection->peerAddress !== "" ? $connection->peerAddress : null
-			);
+			$connection->negotiation = $this->negotiator->beginNegotiation($body, self::networkIdOf($path), peerAddress: $peerAddress);
 		}catch(NegotiationException $e){
 			throw new HttpException(400, $e->getMessage());
 		}

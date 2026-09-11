@@ -34,6 +34,12 @@ final class HttpConnection{
 	/** Whether plain HTTP was received on a TLS listener and requires a redirect. */
 	public bool $redirectToTls = false;
 
+	/**
+	 * Whether the TLS handshake has started. Once started, incoming bytes belong to the handshake and
+	 * must not be checked for plain HTTP.
+	 */
+	public bool $handshakeStarted = false;
+
 	public int $bodyOffset = 0;
 	public int $contentLength = 0;
 

@@ -60,10 +60,10 @@ final class HttpSignalingTest extends TestCase{
 		$this->signaling?->shutdown();
 	}
 
-	private function start(Negotiator $negotiator, ?ServerStatusProvider $statusProvider = null) : void{
+	private function start(Negotiator $negotiator, ?ServerStatusProvider $statusProvider = null, ?ReverseProxy $reverseProxy = null) : void{
 		for($attempt = 0; $attempt < 20; ++$attempt){
 			$port = random_int(20000, 60000);
-			$signaling = new HttpSignaling($negotiator, "127.0.0.1", $port, statusProvider: $statusProvider);
+			$signaling = new HttpSignaling($negotiator, "127.0.0.1", $port, statusProvider: $statusProvider, reverseProxy: $reverseProxy);
 
 			try{
 				$signaling->start();
@@ -172,6 +172,27 @@ final class HttpSignalingTest extends TestCase{
 		//a single request and response cannot carry a candidate afterwards
 		self::assertSame(CandidateMode::BUNDLED, $negotiator->lastMode);
 		//the offer only names the peer's private addresses; the one it signaled from is what a relay needs
+		self::assertSame("127.0.0.1", $negotiator->lastPeerAddress);
+	}
+
+	public function testTrustedProxyHeaderReplacesThePeerAddress() : void{
+		$negotiator = new FakeNegotiator("answer");
+		$this->start($negotiator, reverseProxy: ReverseProxy::nginx(["127.0.0.1"]));
+
+		$this->exchange($this->connect(), "POST /v1/join/1 HTTP/1.1\r\nHost: h\r\nX-Real-IP: 203.0.113.7\r\nContent-Type: application/sdp\r\nContent-Length: 5\r\n\r\noffer");
+
+		self::assertSame("203.0.113.7", $negotiator->lastPeerAddress);
+	}
+
+	/**
+	 * Forwarded headers from untrusted peers must be ignored to prevent IP spoofing.
+	 */
+	public function testProxyHeaderFromAnUntrustedPeerIsIgnored() : void{
+		$negotiator = new FakeNegotiator("answer");
+		$this->start($negotiator, reverseProxy: ReverseProxy::nginx(["10.0.0.0/8"]));
+
+		$this->exchange($this->connect(), "POST /v1/join/1 HTTP/1.1\r\nHost: h\r\nX-Real-IP: 203.0.113.7\r\nContent-Type: application/sdp\r\nContent-Length: 5\r\n\r\noffer");
+
 		self::assertSame("127.0.0.1", $negotiator->lastPeerAddress);
 	}
 
