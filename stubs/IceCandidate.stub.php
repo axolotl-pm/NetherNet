@@ -2,7 +2,7 @@
 
 /**
  * @generate-class-entries
- * @generate-legacy-arginfo 80200
+ * @generate-legacy-arginfo 80100
  */
 
 namespace pmmp\webrtc;
@@ -11,6 +11,8 @@ namespace pmmp\webrtc;
  * A single ICE candidate, as carried over signaling for trickle ICE.
  *
  * Instances are immutable and must be created through create().
+ *
+ * @not-serializable
  */
 final class IceCandidate
 {

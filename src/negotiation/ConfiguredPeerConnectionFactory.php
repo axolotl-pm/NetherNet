@@ -40,7 +40,8 @@ final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 		private readonly ?string $bindAddress = null,
 		private readonly ?int $portRangeBegin = null,
 		private readonly ?int $portRangeEnd = null,
-		private readonly bool $iceUdpMuxEnabled = false
+		private readonly bool $iceUdpMuxEnabled = false,
+		private readonly int $mtu = 1200
 	){
 		if(($portRangeBegin === null) !== ($portRangeEnd === null)){
 			throw new \InvalidArgumentException("Port range needs both a start and an end, or neither");
@@ -61,6 +62,9 @@ final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 				}
 			}
 		}
+		if($mtu < 620 || $mtu > 4144){
+			throw new \InvalidArgumentException("MTU must be between 620 and 4144 bytes, got $mtu");
+		}
 	}
 
 	public function create(ConnectionBudgetConfiguration $budget) : PeerConnection{
@@ -72,7 +76,8 @@ final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 			->setMaxSendQueueSize($budget->getNativeSendQueueSize())
 			->setMaxPendingDataChannels($budget->maxPendingDataChannels)
 			->setIceTcpEnabled(false)
-			->setIceUdpMuxEnabled($this->iceUdpMuxEnabled);
+			->setIceUdpMuxEnabled($this->iceUdpMuxEnabled)
+			->setMtu($this->mtu);
 
 		if($this->bindAddress !== null){
 			$options->setBindAddress($this->bindAddress);

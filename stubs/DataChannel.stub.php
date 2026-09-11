@@ -2,13 +2,15 @@
 
 /**
  * @generate-class-entries
- * @generate-legacy-arginfo 80200
+ * @generate-legacy-arginfo 80100
  */
 
 namespace pmmp\webrtc;
 
 /**
  * A single data channel.
+ *
+ * @not-serializable
  */
 final class DataChannel
 {
@@ -40,7 +42,9 @@ final class DataChannel
     /** Bytes waiting to be read by receive(). */
     public function getAvailableAmount(): int {}
 
-    /** Messages waiting to be read by receive(), which empty ones add no bytes to. */
+    /**
+     * Messages waiting to be read by receive().
+     */
     public function getQueuedMessageCount(): int {}
 
     /**
@@ -53,10 +57,22 @@ final class DataChannel
      */
     public function send(string $data): bool {}
 
-    /** Take the next message, or null if none has arrived. */
+    /**
+     * Take the next message, or null if none has arrived.
+     *
+     * @throws WebRtcException once the channel has overrun its share of the
+     *                         connection's receive queue. A message was
+     *                         dropped at that point, so every later call
+     *                         throws too rather than hand back a stream with
+     *                         a hole in it.
+     */
     public function receive(): ?string {}
 
-    /** Look at the next message without consuming it. */
+    /**
+     * Look at the next message without consuming it.
+     *
+     * @throws WebRtcException on the same terms as receive()
+     */
     public function peek(): ?string {}
 
     public function close(): void {}

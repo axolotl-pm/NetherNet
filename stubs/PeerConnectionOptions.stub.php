@@ -2,13 +2,15 @@
 
 /**
  * @generate-class-entries
- * @generate-legacy-arginfo 80200
+ * @generate-legacy-arginfo 80100
  */
 
 namespace pmmp\webrtc;
 
 /**
  * Builder for PeerConnection configuration. Setters return the same instance.
+ *
+ * @not-serializable
  */
 final class PeerConnectionOptions
 {
@@ -46,10 +48,27 @@ final class PeerConnectionOptions
     /**
      * Bytes a single data channel may hold waiting to go out before send()
      * throws. 0 removes the limit.
+     *
+     * The transport buffers whatever it cannot write yet and never refuses on
+     * its own, so without this a peer that stops reading decides how much
+     * memory this process uses.
      */
     public function setMaxSendQueueSize(int $bytes): PeerConnectionOptions {}
 
     public function getMaxSendQueueSize(): int {}
+
+    /**
+     * Bytes a remote description passed to setRemoteOffer() or setRemoteAnswer()
+     * may hold before it is refused unparsed. 0 removes the limit.
+     *
+     * Parsing an SDP costs time that grows with the square of the candidate
+     * lines it carries, on the thread that called it, so without this a peer
+     * decides how long that call blocks. A real data channel description is a
+     * few kilobytes.
+     */
+    public function setMaxRemoteDescriptionSize(int $bytes): PeerConnectionOptions {}
+
+    public function getMaxRemoteDescriptionSize(): int {}
 
     /**
      * Data channels a peer may have open and uncollected before further ones
@@ -66,6 +85,16 @@ final class PeerConnectionOptions
 
     /** Local UDP port range to gather ICE candidates from. */
     public function setPortRange(int $begin, int $end): PeerConnectionOptions {}
+
+    /**
+     * Maximum transmission unit (MTU) in bytes.
+     *
+     * The MTU must be at least 620 bytes for SCTP negotiation to succeed, and
+     * at most 4144 bytes to prevent incoming packets from being truncated.
+     *
+     * @throws \ValueError if the size is outside 620..4144
+     */
+    public function setMtu(int $bytes): PeerConnectionOptions {}
 
     /**
      * Restrict candidate gathering to a single local address.
@@ -97,6 +126,14 @@ final class PeerConnectionOptions
      */
     public function setIceUdpMuxEnabled(bool $enable): PeerConnectionOptions {}
 
+    /**
+     * Restrict which candidate types may be used. RELAY forces every path
+     * through a TURN server, so it needs at least one configured.
+     */
+    public function setIceTransportPolicy(TransportPolicy $policy): PeerConnectionOptions {}
+
+    public function getIceTransportPolicy(): TransportPolicy {}
+
     /** Returns 0 if no explicit limit was set. */
     public function getMaxMessageSize(): int {}
 
@@ -106,6 +143,9 @@ final class PeerConnectionOptions
     public function getPortRangeBegin(): int {}
 
     public function getPortRangeEnd(): int {}
+
+    /** Returns 0 if no explicit MTU is set. */
+    public function getMtu(): int {}
 
     public function getBindAddress(): ?string {}
 
