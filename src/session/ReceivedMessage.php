@@ -14,9 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\session;
 
-/**
- * Represents an incoming message payload and its delivery channel.
- */
 final class ReceivedMessage{
 
 	public function __construct(

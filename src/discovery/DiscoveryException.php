@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\discovery;
 
 use pocketmine\nethernet\NetherNetException;
 
-/**
- * Thrown when LAN discovery encoding, decoding, or signaling fails.
- */
 class DiscoveryException extends NetherNetException{
 
 }

@@ -24,9 +24,6 @@ use function strlen;
 use function substr;
 use const OPENSSL_RAW_DATA;
 
-/**
- * Encrypts and decrypts LAN discovery datagrams using AES-256-ECB and HMAC-SHA256.
- */
 final class DiscoveryCipher{
 
 	/**
@@ -39,16 +36,12 @@ final class DiscoveryCipher{
 
 	private function __construct(){}
 
-	/** SHA-256 hash of the application ID as a little-endian 64-bit value. */
 	public static function key() : string{
 		static $key = null;
 
 		return $key ??= hash("sha256", pack("P", self::APPLICATION_ID), true);
 	}
 
-	/**
-	 * Encrypts a plaintext payload and prepends its HMAC-SHA256 checksum.
-	 */
 	public static function seal(string $payload) : string{
 		$key = self::key();
 

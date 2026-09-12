@@ -19,18 +19,12 @@ use function str_pad;
 use function strlen;
 use const STR_PAD_LEFT;
 
-/**
- * Utility helpers for OpenSSL error handling.
- */
 final class OpenSsl{
 
 	private function __construct(){
 		//NOOP
 	}
 
-	/**
-	 * Returns the most recent OpenSSL error message while draining the error queue.
-	 */
 	public static function lastError() : string{
 		$message = null;
 		while(($error = openssl_error_string()) !== false){
@@ -42,10 +36,6 @@ final class OpenSsl{
 
 	/**
 	 * Restores a curve component to its full width.
-	 *
-	 * OpenSSL hands back these numbers with leading zero bytes removed, so roughly
-	 * one value in 256 arrives a byte short. The formats that carry them are
-	 * fixed-width, and a short one silently shifts everything after it.
 	 *
 	 * @throws CryptoException if the value is wider than the curve allows
 	 */

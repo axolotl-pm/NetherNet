@@ -42,9 +42,7 @@ final class JsonWebToken{
 	public const DEFAULT_LEEWAY_SECONDS = 60;
 
 	/**
-	 * @param mixed[] $header
 	 * @phpstan-param array<string, mixed> $header
-	 * @param mixed[] $claims
 	 * @phpstan-param array<string, mixed> $claims
 	 */
 	private function __construct(
@@ -55,14 +53,14 @@ final class JsonWebToken{
 	){}
 
 	/**
-	 * Decodes a compact JWT without verifying its signature.
+	 * Decodes a JWT without verifying its signature.
 	 *
 	 * @throws CryptoException
 	 */
 	public static function parse(string $compact) : self{
 		$parts = explode(".", $compact, limit: 4);
 		if(count($parts) !== 3){
-			throw new CryptoException("Token must have exactly three period-separated parts");
+			throw new CryptoException("Expected 3 parts in JWT, got " . count($parts));
 		}
 
 		return new self(
@@ -90,8 +88,6 @@ final class JsonWebToken{
 	}
 
 	/**
-	 * Mints a self-signed Server Identity JWT with the `cpk` claim for answer assertions.
-	 *
 	 * @throws CryptoException
 	 */
 	public static function sign(PublicKey $publicKey, \OpenSSLAsymmetricKey $privateKey, int $lifetimeSeconds = 60) : string{
@@ -118,7 +114,6 @@ final class JsonWebToken{
 	}
 
 	/**
-	 * @param mixed[] $value
 	 * @phpstan-param array<string, mixed> $value
 	 *
 	 * @throws CryptoException
@@ -132,13 +127,11 @@ final class JsonWebToken{
 	}
 
 	/**
-	 * @return mixed[]
 	 * @phpstan-return array<string, mixed>
 	 */
 	public function getHeader() : array{ return $this->header; }
 
 	/**
-	 * @return mixed[]
 	 * @phpstan-return array<string, mixed>
 	 */
 	public function getClaims() : array{ return $this->claims; }
@@ -150,8 +143,6 @@ final class JsonWebToken{
 	}
 
 	/**
-	 * Extracts and parses the `cpk` (Public Key) claim from the token.
-	 *
 	 * @throws CryptoException
 	 */
 	public function getPublicKey() : PublicKey{
@@ -163,8 +154,6 @@ final class JsonWebToken{
 	}
 
 	/**
-	 * Verifies that a self-signed Server Identity JWT was signed by the key specified in its `cpk` claim.
-	 *
 	 * @throws CryptoException
 	 */
 	public function verifySelfSigned() : void{
@@ -177,8 +166,6 @@ final class JsonWebToken{
 	}
 
 	/**
-	 * Validates time-based claims (`nbf`, `exp`) with leeway.
-	 *
 	 * @throws CryptoException
 	 */
 	public function checkTimestamps(int $leewaySeconds = self::DEFAULT_LEEWAY_SECONDS, ?int $now = null) : void{

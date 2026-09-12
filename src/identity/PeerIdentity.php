@@ -16,13 +16,6 @@ namespace pocketmine\nethernet\identity;
 
 /**
  * Represents the verified cryptographic identity of a connected peer.
- *
- * The public key is extracted from the peer's token (`cpk` claim) and verified against the connection's DTLS fingerprint.
- * This confirms possession of the matching private key.
- *
- * Note: Token claims (such as XUID) are not verified against Minecraft Auth Services here, as Mojang does not
- * publish signing keys for GameServerTokens. To bind a connection to an authenticated Minecraft player, verify
- * that the `cpk` in the Minecraft Login packet chain matches {@link self::$publicKey}.
  */
 final class PeerIdentity{
 

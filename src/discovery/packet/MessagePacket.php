@@ -20,9 +20,6 @@ use pmmp\encoding\LE;
 use pocketmine\nethernet\discovery\DiscoveryException;
 use function strlen;
 
-/**
- * Carries a signaling payload addressed to a specific network peer.
- */
 final class MessagePacket extends Packet{
 
 	private const MAX_DATA_LENGTH = 65535;

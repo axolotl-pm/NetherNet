@@ -14,9 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet;
 
-/**
- * Base class for all exceptions thrown by the NetherNet library.
- */
 class NetherNetException extends \RuntimeException{
 
 }

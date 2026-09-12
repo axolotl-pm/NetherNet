@@ -18,9 +18,6 @@ use pocketmine\nethernet\session\DisconnectReason;
 use pocketmine\nethernet\session\Reliability;
 use pocketmine\nethernet\session\Session;
 
-/**
- * Listens for client connection, message, and disconnection events.
- */
 interface ServerEventListener{
 
 	/**

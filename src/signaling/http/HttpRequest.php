@@ -48,7 +48,7 @@ final class HttpRequest{
 	private const TOKEN_PATTERN = '/^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+$/';
 
 	/**
-	 * @param array<string, string> $headers Keyed by lowercase header name.
+	 * @phpstan-param array<string, string> $headers
 	 */
 	private function __construct(
 		public readonly string $method,
@@ -125,7 +125,9 @@ final class HttpRequest{
 		return $this->headers[strtolower($name)] ?? null;
 	}
 
-	/** Returns the target path with query strings or fragments stripped. */
+	/**
+	 * Returns the target path with query strings or fragments stripped.
+	 */
 	public function getPath() : string{
 		$target = $this->target;
 		foreach(["?", "#"] as $separator){

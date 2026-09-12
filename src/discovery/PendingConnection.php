@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\discovery;
 
 use pocketmine\nethernet\negotiation\Negotiation;
 
-/**
- * Tracks an in-progress LAN Trickle ICE signaling negotiation.
- */
 final class PendingConnection{
 
 	public bool $answerSent = false;

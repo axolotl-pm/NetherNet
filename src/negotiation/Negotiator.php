@@ -32,9 +32,6 @@ interface Negotiator{
 	 */
 	public function beginNegotiation(string $offerSdp, string $networkId, CandidateMode $candidateMode = CandidateMode::BUNDLED, ?string $peerAddress = null) : Negotiation;
 
-	/**
-	 * Advances active handshakes and checks for timeouts.
-	 */
 	public function tick() : void;
 
 	/**

@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\session;
 
 use pmmp\webrtc\DataChannel;
 
-/**
- * Represents the two SCTP data channels used by NetherNet: `ReliableDataChannel` and `UnreliableDataChannel`.
- */
 enum Reliability{
 
 	/**
@@ -38,9 +35,6 @@ enum Reliability{
 		};
 	}
 
-	/**
-	 * Returns whether multi-segment message fragmentation is supported on this channel (ReliableDataChannel only).
-	 */
 	public function isFragmentationSupported() : bool{
 		return $this === self::RELIABLE;
 	}
@@ -55,9 +49,6 @@ enum Reliability{
 		return null;
 	}
 
-	/**
-	 * Verifies that a remote data channel's configuration matches the NetherNet protocol specification.
-	 */
 	public function matches(DataChannel $channel) : bool{
 		if($channel->getLabel() !== $this->getChannelLabel() || $channel->getProtocol() !== ""){
 			return false;

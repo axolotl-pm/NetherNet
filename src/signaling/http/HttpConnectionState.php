@@ -14,9 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\http;
 
-/**
- * Lifecycle stages of an inbound HTTP signaling connection.
- */
 enum HttpConnectionState{
 
 	/**

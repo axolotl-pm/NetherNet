@@ -24,12 +24,8 @@ use function strlen;
 use function substr;
 use const STR_PAD_LEFT;
 
-/**
- * Converts ECDSA signatures between ASN.1 DER (OpenSSL) and IEEE P1363 / JOSE format.
- */
 final class EcdsaSignature{
 
-	/** Half of an ES384 signature, matching the P-384 coordinate size (48 bytes). */
 	public const P384_COORDINATE_SIZE = 48;
 
 	private const ASN1_INTEGER_TAG = "\x02";
@@ -67,8 +63,6 @@ final class EcdsaSignature{
 	}
 
 	/**
-	 * @param int $offset reference parameter
-	 *
 	 * @throws CryptoException
 	 */
 	private static function readInteger(string $der, int &$offset, int $coordinateSize) : string{

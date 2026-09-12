@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\signaling\http;
 
 use pocketmine\nethernet\NetherNetException;
 
-/**
- * Thrown when an HTTP error with a specific HTTP status code occurs during signaling.
- */
 class HttpException extends NetherNetException{
 
 	public function __construct(

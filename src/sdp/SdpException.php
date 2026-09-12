@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\sdp;
 
 use pocketmine\nethernet\NetherNetException;
 
-/**
- * Thrown when SDP parsing or structure validation fails.
- */
 class SdpException extends NetherNetException{
 
 }

@@ -25,9 +25,6 @@ use function str_starts_with;
 use function strlen;
 use function substr;
 
-/**
- * Line-based parser and manipulator for SDP descriptions.
- */
 final class SessionDescription{
 
 	public const ATTRIBUTE_IDENTITY = "identity";
@@ -41,9 +38,8 @@ final class SessionDescription{
 	public const MAX_LINES = 1024;
 
 	/**
-	 * @param string[] $lines
-	 * @phpstan-param list<string> $lines
 	 * @param int      $mediaStart Index of the first `m=` line, or line count if none.
+	 * @phpstan-param list<string> $lines
 	 */
 	private function __construct(
 		private readonly array $lines,
@@ -74,7 +70,6 @@ final class SessionDescription{
 	}
 
 	/**
-	 * @param string[] $lines
 	 * @phpstan-param list<string> $lines
 	 */
 	private static function findMediaStart(array $lines) : int{
@@ -110,7 +105,6 @@ final class SessionDescription{
 	}
 
 	/**
-	 * @return string[]
 	 * @phpstan-return list<string>
 	 */
 	public function getMediaAttributeValues(string $name) : array{
@@ -118,10 +112,8 @@ final class SessionDescription{
 	}
 
 	/**
-	 * @param string[] $lines
 	 * @phpstan-param list<string> $lines
 	 *
-	 * @return string[]
 	 * @phpstan-return list<string>
 	 */
 	private static function attributeValuesIn(array $lines, string $name) : array{
@@ -186,7 +178,6 @@ final class SessionDescription{
 		return $size;
 	}
 
-	/** Returns the raw value of the session-level `a=identity` attribute, if present. */
 	public function getIdentity() : ?string{
 		$values = $this->getSessionAttributeValues(self::ATTRIBUTE_IDENTITY);
 
@@ -222,11 +213,6 @@ final class SessionDescription{
 		return new self($lines, self::findMediaStart($lines));
 	}
 
-	/**
-	 * Counts the `a=candidate:` lines. The native stack resolves a candidate
-	 * whose address is a hostname on a thread of its own, so this is what a peer
-	 * can turn into resolver work by packing an offer with candidate lines.
-	 */
 	public function countCandidates() : int{
 		$count = 0;
 		foreach($this->lines as $line){

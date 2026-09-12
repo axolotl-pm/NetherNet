@@ -18,15 +18,6 @@ use pocketmine\nethernet\session\framing\Segmenter;
 
 /**
  * Resource limits and queue thresholds for a single peer connection.
- *
- * Queue thresholds configured here are enforced by this library so sessions close with a specific
- * {@link \pocketmine\nethernet\session\DisconnectReason}. Native limits applied to the underlying
- * WebRTC connection are derived from these thresholds as a fallback to prevent unhandled data channel
- * resets before session-level limits trigger.
- *
- * Receive limits include a safety margin because both layers count queues across the entire connection.
- * Send limits pass through unscaled because the native stack enforces them per data channel, while
- * sessions check the aggregate across all channels.
  */
 final class ConnectionBudgetConfiguration{
 

@@ -20,20 +20,10 @@ use pmmp\webrtc\PeerConnectionOptions;
 use pocketmine\nethernet\ConnectionBudgetConfiguration;
 use function count;
 
-/**
- * Creates WebRTC PeerConnection instances configured with preset options and ICE servers.
- */
 final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 
 	/**
-	 * @param IceServer[] $iceServers
 	 * @phpstan-param list<IceServer> $iceServers
-	 *
-	 * @param string|null $bindAddress      Local address to bind ICE sockets, or null for all interfaces.
-	 * @param int|null    $portRangeBegin   Start of UDP port range.
-	 * @param int|null    $portRangeEnd     End of UDP port range.
-	 * @param bool        $iceUdpMuxEnabled Share one UDP socket across every connection, so a single forwarded
-	 *                                      port carries all of them. Rules out TURN.
 	 */
 	public function __construct(
 		private readonly array $iceServers = [],

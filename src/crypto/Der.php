@@ -19,12 +19,8 @@ use function ltrim;
 use function pack;
 use function strlen;
 
-/**
- * Minimal ASN.1 DER encoder for binary structures not directly exposed by OpenSSL.
- */
 final class Der{
 
-	/** Longest body this can express, since lengths are written in at most four bytes. */
 	private const MAX_LENGTH = 0xffffffff;
 
 	private function __construct(){

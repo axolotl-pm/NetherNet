@@ -14,9 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\discovery;
 
-/**
- * Minecraft game modes advertised in LAN discovery.
- */
 enum GameType : int{
 
 	case SURVIVAL = 0;

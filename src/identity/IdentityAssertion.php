@@ -28,9 +28,6 @@ use const JSON_UNESCAPED_SLASHES;
 
 /**
  * Represents the WebRTC identity assertion attribute (`a=identity`, RFC 8827) exchanged in SDP.
- *
- * Encloses an `idp` dictionary and an `assertion` string containing a JWT (`GameServerToken` in offers,
- * or Server Identity JWT in answers) along with detached JWS fingerprints covering DTLS certificate digests.
  */
 final class IdentityAssertion{
 
@@ -68,7 +65,7 @@ final class IdentityAssertion{
 
 		$idp = $decoded["idp"] ?? null;
 		if(!is_array($idp)){
-			throw new CryptoException("Identity envelope has no idp object");
+			throw new CryptoException("Identity has no idp object");
 		}
 		$domain = $idp["domain"] ?? null;
 		$protocol = $idp["protocol"] ?? null;
@@ -78,7 +75,7 @@ final class IdentityAssertion{
 
 		$inner = $decoded["assertion"] ?? null;
 		if(!is_string($inner)){
-			throw new CryptoException("Identity envelope assertion must be a JSON string");
+			throw new CryptoException("Identity assertion must be a JSON string");
 		}
 		$assertion = self::decodeJsonObject($inner, "identity assertion");
 
@@ -123,10 +120,10 @@ final class IdentityAssertion{
 			throw new CryptoException("Identity provider domain must not be empty");
 		}
 		if($this->token === "" || substr_count($this->token, ".") !== 2){
-			throw new CryptoException("Identity token is not a compact JWS");
+			throw new CryptoException("Identity token is not valid JWS");
 		}
 		if($this->fingerprints === "" || substr_count($this->fingerprints, ".") !== 2){
-			throw new CryptoException("Fingerprint assertion is not a compact JWS");
+			throw new CryptoException("Fingerprint assertion is not valid JWS");
 		}
 	}
 

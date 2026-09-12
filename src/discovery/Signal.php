@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\discovery;
 
 use function explode;
 
-/**
- * Represents a text-based signaling message exchanged during discovery.
- */
 final class Signal{
 
 	public function __construct(

@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\signaling;
 
 use pocketmine\nethernet\NetherNetException;
 
-/**
- * Thrown when a signaling transport interface fails to initialize or operate.
- */
 class SignalingException extends NetherNetException{
 
 }

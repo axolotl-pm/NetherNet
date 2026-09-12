@@ -26,20 +26,11 @@ use function openssl_pkey_get_details;
 use function openssl_pkey_get_private;
 use function openssl_pkey_new;
 
-/**
- * Manages an operator's long-lived P-384 keypair used for server identity assertions and client TOFU pinning.
- *
- * Nothing here goes through openssl_pkey_export(). That is the one OpenSSL call
- * that insists on reading a configuration file, and stock PHP on Windows has
- * none, so a host that would otherwise work fails to start with an error about a
- * missing config rather than anything to do with keys. Writing the PKCS#8
- * ourselves keeps the file a normal PEM that other tools can read.
- */
 final class ServerIdentity{
 
 	public const CURVE_NAME = "secp384r1";
 
-	/** Coordinate width for P-384: each of d, x and y is exactly this many bytes. */
+	/** Coordinate width for P-384 */
 	private const COORDINATE_SIZE = 48;
 
 	/** OID 1.2.840.10045.2.1, id-ecPublicKey. */
@@ -57,9 +48,6 @@ final class ServerIdentity{
 	 * @throws CryptoException
 	 */
 	public static function generate() : self{
-		//the nested "ec" form, which is what PocketMine uses. The flat
-		//private_key_type/curve_name form asks OpenSSL to resolve defaults out of a
-		//configuration file and fails without one
 		$key = openssl_pkey_new(["ec" => ["curve_name" => self::CURVE_NAME]]);
 		if($key === false){
 			throw new CryptoException("OpenSSL could not generate a key: " . OpenSsl::lastError());
@@ -81,12 +69,6 @@ final class ServerIdentity{
 	}
 
 	/**
-	 * Exports the private key as an unencrypted PKCS#8 PEM.
-	 *
-	 * The structure is the one OpenSSL itself emits for this curve:
-	 * PrivateKeyInfo wrapping a SEC1 ECPrivateKey, with the curve named once in
-	 * the algorithm identifier and the public point repeated in the inner [1].
-	 *
 	 * @throws CryptoException
 	 */
 	public function exportPrivateKeyPem() : string{
@@ -115,13 +97,6 @@ final class ServerIdentity{
 	}
 
 	/**
-	 * The private scalar and public point, each padded to the curve's width.
-	 *
-	 * OpenSSL strips leading zero bytes, so a component that happens to start
-	 * with one comes back short and has to be padded back out. Writing it short
-	 * produces a PEM that parses but describes a different key.
-	 *
-	 * @return string[]
 	 * @phpstan-return array{string, string, string}
 	 *
 	 * @throws CryptoException

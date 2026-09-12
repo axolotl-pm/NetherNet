@@ -21,9 +21,6 @@ use function str_repeat;
 use function strlen;
 use function strtr;
 
-/**
- * URL-safe Base64 encoding and decoding without padding (RFC 7515 Section 2).
- */
 final class Base64Url{
 
 	private function __construct(){}

@@ -14,13 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\discovery;
 
-/**
- * Types of signaling messages carried in discovery datagrams.
- *
- * The values are the words that go on the wire, and vanilla writes them without
- * a separator. Spelling them any other way makes every signal unreadable to a
- * real client, which shows up as a host that never answers.
- */
 enum SignalType : string{
 
 	case CONNECT_REQUEST = "CONNECTREQUEST";

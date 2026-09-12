@@ -21,9 +21,6 @@ use pmmp\webrtc\WebRtcException;
 use pocketmine\nethernet\identity\PeerIdentity;
 use pocketmine\nethernet\session\Reliability;
 
-/**
- * Tracks state, SDP answer delivery, and ICE candidate exchange for an active WebRTC negotiation.
- */
 final class WebRtcNegotiation implements Negotiation{
 
 	private NegotiationState $state = NegotiationState::GATHERING;

@@ -14,9 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\discovery;
 
-/**
- * Holds mutable ServerData updated as server state changes.
- */
 final class MutableServerDataProvider implements ServerDataProvider{
 
 	public function __construct(

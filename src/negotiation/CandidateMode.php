@@ -14,18 +14,15 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\negotiation;
 
-/**
- * Strategy for delivering ICE candidates during WebRTC negotiation.
- */
 enum CandidateMode{
 
 	/**
-	 * Full ICE: all ICE candidates are gathered before the SDP is sent (trickle ICE disabled, used in HTTP signaling).
+	 * Full ICE - all ICE candidates are gathered before the SDP is sent (trickle ICE disabled, used in HTTP signaling).
 	 */
 	case BUNDLED;
 
 	/**
-	 * Trickle ICE: candidates are gathered and transmitted incrementally in parallel (used in LAN signaling).
+	 * Trickle ICE - candidates are gathered and transmitted incrementally in parallel (used in LAN signaling).
 	 */
 	case TRICKLE;
 }

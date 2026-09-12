@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\session;
 
 use pocketmine\nethernet\NetherNetException;
 
-/**
- * Thrown when an error occurs during session transport or message transmission.
- */
 class SessionException extends NetherNetException{
 
 }

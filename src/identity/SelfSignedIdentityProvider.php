@@ -18,10 +18,7 @@ use pocketmine\nethernet\crypto\CryptoException;
 use pocketmine\nethernet\sdp\Fingerprint;
 
 /**
- * Generates server identity assertions (`a=identity`) for SDP answers.
- *
- * Produces a self-signed Server Identity JWT carrying the operator's public key (`cpk`)
- * and a detached JWS signature over the local DTLS certificate fingerprint (for client TOFU or TLS verification).
+ * Generates self-signed server identity assertions (`a=identity`) for SDP answers.
  */
 final class SelfSignedIdentityProvider implements IdentityProvider{
 

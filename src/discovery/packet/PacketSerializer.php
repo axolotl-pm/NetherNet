@@ -23,9 +23,6 @@ use pocketmine\nethernet\discovery\DiscoveryException;
 use function str_repeat;
 use function strlen;
 
-/**
- * Serializes and deserializes discovery packets with their headers.
- */
 final class PacketSerializer{
 
 	private const HEADER_SIZE = 18;

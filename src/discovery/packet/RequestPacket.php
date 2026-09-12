@@ -17,9 +17,6 @@ namespace pocketmine\nethernet\discovery\packet;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 
-/**
- * Discovery request broadcast packet sent by clients seeking local servers.
- */
 final class RequestPacket extends Packet{
 
 	public function getType() : PacketType{ return PacketType::REQUEST; }

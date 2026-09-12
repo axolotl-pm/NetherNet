@@ -22,9 +22,6 @@ use function bin2hex;
 use function hex2bin;
 use function strlen;
 
-/**
- * Server discovery response packet advertising server metadata.
- */
 final class ResponsePacket extends Packet{
 
 	private const MAX_ENCODED_LENGTH = 65535;
@@ -38,12 +35,12 @@ final class ResponsePacket extends Packet{
 	public function decodeBody(ByteBufferReader $in) : void{
 		$length = LE::readUnsignedInt($in);
 		if($length > self::MAX_ENCODED_LENGTH){
-			throw new DiscoveryException("Advertised application data of $length bytes is implausible");
+			throw new DiscoveryException("Invalid data length $length (max " . self::MAX_ENCODED_LENGTH . ")");
 		}
 
 		$decoded = hex2bin($in->readByteArray($length));
 		if($decoded === false){
-			throw new DiscoveryException("Application data is not valid hex");
+			throw new DiscoveryException("Invalid hex data");
 		}
 
 		$this->applicationData = $decoded;

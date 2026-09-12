@@ -14,9 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\discovery\packet;
 
-/**
- * Types of discovery datagram packets.
- */
 enum PacketType : int{
 
 	case REQUEST = 0;

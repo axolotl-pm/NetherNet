@@ -14,9 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling;
 
-/**
- * Transport for exchanging connection offers and answers (e.g. LAN broadcast or HTTP).
- */
 interface SignalingInterface{
 
 	/**

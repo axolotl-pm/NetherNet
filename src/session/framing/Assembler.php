@@ -56,7 +56,7 @@ final class Assembler{
 		$length = strlen($segment);
 		if($length < 2){
 			$this->reset();
-			throw new FramingException("Segment must carry a counter byte and at least one payload byte, got $length bytes");
+			throw new FramingException("Segment must have a counter byte and at least one payload byte, got $length bytes");
 		}
 
 		$remaining = ord($segment[0]);
@@ -67,7 +67,7 @@ final class Assembler{
 		if($this->remaining > 0 && $remaining !== $this->remaining - 1){
 			$expected = $this->remaining - 1;
 			$this->reset();
-			throw new FramingException("Expected a segment announcing $expected more to come, got $remaining");
+			throw new FramingException("Expected a segment $expected more to come, got $remaining");
 		}
 
 		if(strlen($this->buffer) + $length - 1 > $this->maxPayloadSize){

@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\session\framing;
 
 use pocketmine\nethernet\NetherNetException;
 
-/**
- * Thrown when message framing or segment reassembly fails.
- */
 class FramingException extends NetherNetException{
 
 }

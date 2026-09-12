@@ -18,9 +18,6 @@ use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\DataDecodeException;
 
-/**
- * Base class for discovery datagram packets.
- */
 abstract class Packet{
 
 	abstract public function getType() : PacketType;

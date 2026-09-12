@@ -26,9 +26,6 @@ use pocketmine\nethernet\session\framing\Segmenter;
 use function count;
 use function microtime;
 
-/**
- * Represents a connected client session over WebRTC data channels.
- */
 final class Session{
 
 	/**
@@ -36,10 +33,7 @@ final class Session{
 	 */
 	public const DISCONNECT_FLUSH_TIMEOUT = 2.0;
 
-	/**
-	 * @var DataChannel[]
-	 * @phpstan-var array<string, DataChannel>
-	 */
+	/** @phpstan-var array<string, DataChannel> */
 	private readonly array $channels;
 
 	/**
@@ -55,10 +49,7 @@ final class Session{
 	private float $disconnectDeadline = 0.0;
 
 	/**
-	 * @param DataChannel[] $channels Keyed by {@link Reliability} case name.
 	 * @phpstan-param array<string, DataChannel> $channels
-	 *
-	 * @internal Created by {@link SessionManager::open()}.
 	 */
 	public function __construct(
 		private readonly int $id,
@@ -87,9 +78,6 @@ final class Session{
 
 	/**
 	 * Returns the verified cryptographic identity of the peer, or null if connected without an assertion.
-	 *
-	 * Note that this represents a cryptographic key rather than an authenticated player account.
-	 * See {@link PeerIdentity} for details on player verification.
 	 */
 	public function getIdentity() : ?PeerIdentity{ return $this->identity; }
 
@@ -106,8 +94,6 @@ final class Session{
 	public function getDisconnectReason() : ?DisconnectReason{ return $this->disconnectReason; }
 
 	/**
-	 * Sends a message payload to the client, splitting large messages if needed on reliable channels.
-	 *
 	 * @throws SessionException
 	 * @throws FramingException
 	 */
@@ -139,8 +125,6 @@ final class Session{
 	}
 
 	/**
-	 * Reads one complete incoming message from the client.
-	 *
 	 * @throws SessionException
 	 */
 	public function receive() : ?ReceivedMessage{
@@ -167,9 +151,6 @@ final class Session{
 		return null;
 	}
 
-	/**
-	 * Checks connection health and enforces queue size limits.
-	 */
 	public function checkLiveness() : bool{
 		if($this->closed){
 			return false;

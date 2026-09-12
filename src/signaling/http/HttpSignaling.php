@@ -158,8 +158,6 @@ final class HttpSignaling implements SignalingInterface{
 	}
 
 	/**
-	 * Validates TLS certificate and private key file accessibility at startup.
-	 *
 	 * @throws SignalingException
 	 */
 	private function checkTlsFilesReadable() : void{
@@ -426,8 +424,6 @@ final class HttpSignaling implements SignalingInterface{
 	}
 
 	/**
-	 * Validates HTTP route, method, headers, and NetworkID from the request URI path.
-	 *
 	 * @throws HttpException
 	 */
 	private function checkRoutable(HttpRequest $request) : void{

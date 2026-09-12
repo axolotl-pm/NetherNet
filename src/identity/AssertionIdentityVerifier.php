@@ -19,18 +19,9 @@ use pocketmine\nethernet\sdp\Fingerprint;
 
 /**
  * Verifies a peer's identity assertion (`a=identity`) against its DTLS fingerprint.
- *
- * This confirms that the peer holds the private key matching the public key (`cpk`) in the token.
- * To validate the token signature or enforce custom policies, provide a {@link TokenVerifier}
- * (e.g. {@link SelfSignedTokenVerifier}).
  */
 final class AssertionIdentityVerifier implements IdentityVerifier{
 
-	/**
-	 * @param bool               $allowAnonymous Whether offers without an `a=identity` assertion are allowed.
-	 * @param TokenVerifier|null $tokenVerifier  Optional verifier to validate the token. If null,
-	 *                                           any well-formed, unexpired token is accepted.
-	 */
 	public function __construct(
 		private readonly bool $allowAnonymous = false,
 		private readonly ?TokenVerifier $tokenVerifier = null
@@ -42,7 +33,7 @@ final class AssertionIdentityVerifier implements IdentityVerifier{
 	public function verify(?string $attributeValue, Fingerprint $remoteFingerprint) : ?PeerIdentity{
 		if($attributeValue === null){
 			if(!$this->allowAnonymous){
-				throw new IdentityException("Offer carries no identity assertion");
+				throw new IdentityException("Offer has no identity assertion");
 			}
 
 			return null;

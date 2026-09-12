@@ -19,9 +19,6 @@ use pmmp\webrtc\PeerConnection;
 use pocketmine\nethernet\identity\PeerIdentity;
 use pocketmine\nethernet\session\Reliability;
 
-/**
- * Represents an established WebRTC peer connection ready to be converted into an active session.
- */
 final class EstablishedPeer{
 
 	/**

@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\negotiation;
 
 use pocketmine\nethernet\NetherNetException;
 
-/**
- * Thrown when initiating WebRTC peer negotiation fails.
- */
 class NegotiationException extends NetherNetException{
 
 	public function __construct(

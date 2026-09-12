@@ -21,9 +21,6 @@ use pocketmine\nethernet\negotiation\ConfiguredPeerConnectionFactory;
 use pocketmine\nethernet\negotiation\PeerConnectionFactory;
 use pocketmine\nethernet\negotiation\WebRtcNegotiator;
 
-/**
- * Configuration parameters and dependencies for initializing a NetherNet server host.
- */
 final class ServerConfiguration{
 
 	/**

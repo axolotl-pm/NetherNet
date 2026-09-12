@@ -44,9 +44,6 @@ final class ReverseProxy{
 	private array $networks = [];
 
 	/**
-	 * @param string[] $headers  Names of the headers containing the client address, checked in order.
-	 * @param string[] $networks IP addresses or CIDR blocks of trusted reverse proxies. If empty, all peers are
-	 *                           trusted, which is only safe when the signaling port is accessible only through a proxy.
 	 * @phpstan-param list<string> $headers
 	 * @phpstan-param list<string> $networks
 	 *
@@ -65,7 +62,6 @@ final class ReverseProxy{
 	}
 
 	/**
-	 * @param string[] $networks
 	 * @phpstan-param list<string> $networks
 	 */
 	public static function nginx(array $networks = []) : self{
@@ -73,7 +69,6 @@ final class ReverseProxy{
 	}
 
 	/**
-	 * @param string[] $networks
 	 * @phpstan-param list<string> $networks
 	 */
 	public static function caddy(array $networks = []) : self{
@@ -81,7 +76,6 @@ final class ReverseProxy{
 	}
 
 	/**
-	 * @param string[] $networks
 	 * @phpstan-param list<string> $networks
 	 */
 	public static function cloudflare(array $networks = []) : self{
@@ -163,7 +157,7 @@ final class ReverseProxy{
 	}
 
 	/**
-	 * @return array{string, int}
+	 * @phpstan-return array{string, int}
 	 *
 	 * @throws \InvalidArgumentException
 	 */

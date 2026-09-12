@@ -97,7 +97,7 @@ final class ServerData{
 		try{
 			$version = Byte::readUnsigned($in);
 			if($version !== self::VERSION){
-				throw new DiscoveryException("Advert is version $version, expected " . self::VERSION);
+				throw new DiscoveryException("Expected advert version " . self::VERSION . ", got $version");
 			}
 
 			$serverName = self::readString($in);
@@ -129,7 +129,7 @@ final class ServerData{
 				throw new DiscoveryException("Advert has " . $in->getUnreadLength() . " bytes left over");
 			}
 		}catch(DataDecodeException $e){
-			throw new DiscoveryException("Advert ended early: " . $e->getMessage(), 0, $e);
+			throw new DiscoveryException("Advert ended too early: " . $e->getMessage(), 0, $e);
 		}
 
 		return new self(

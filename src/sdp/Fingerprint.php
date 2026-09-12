@@ -43,8 +43,6 @@ final class Fingerprint{
 	}
 
 	/**
-	 * Parses the value portion of an `a=fingerprint` attribute line.
-	 *
 	 * @throws SdpException
 	 */
 	public static function parse(string $value) : self{
@@ -64,7 +62,6 @@ final class Fingerprint{
 		return strcasecmp($this->algorithm, $other->algorithm) === 0 && strcasecmp($this->digest, $other->digest) === 0;
 	}
 
-	/** The value as formatted for `a=fingerprint:`. */
 	public function toAttributeValue() : string{
 		return $this->algorithm . " " . $this->digest;
 	}

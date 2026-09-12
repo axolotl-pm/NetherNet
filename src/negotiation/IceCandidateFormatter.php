@@ -77,9 +77,6 @@ final class IceCandidateFormatter{
 	}
 
 	/**
-	 * @param string $ufrag Local ICE username fragment.
-	 * @param int    $index Candidate index used for the `network-id` attribute.
-	 *
 	 * @throws NegotiationException
 	 */
 	public static function format(string $candidate, string $ufrag, int $index) : string{

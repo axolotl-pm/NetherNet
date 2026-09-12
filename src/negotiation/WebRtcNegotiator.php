@@ -28,16 +28,8 @@ use pocketmine\nethernet\sdp\SessionDescription;
 use pocketmine\nethernet\session\Reliability;
 use function microtime;
 
-/**
- * Orchestrates WebRTC PeerConnection negotiation, Full ICE/Trickle ICE gathering, identity verification, and data channel setup.
- */
 final class WebRtcNegotiator implements Negotiator{
 
-	/**
-	 * A peer gathers a handful of candidates under Full ICE, so anything past
-	 * this is refused. The ceiling matters because the native stack starts a
-	 * resolver thread for every candidate whose address is a hostname.
-	 */
 	public const DEFAULT_MAX_REMOTE_CANDIDATES = 32;
 
 	/**
@@ -55,12 +47,6 @@ final class WebRtcNegotiator implements Negotiator{
 	private int $nextNegotiationId = 0;
 	private bool $closed = false;
 
-	/**
-	 * @param ConnectionBudgetConfiguration $budget              Resource limits and queue thresholds for peer connections.
-	 * @param float                         $gatheringTimeout    Timeout in seconds for ICE candidate gathering (Full ICE).
-	 * @param float                         $channelTimeout      Timeout in seconds for remote peer to open data channels (`ReliableDataChannel` and `UnreliableDataChannel`).
-	 * @param int                           $maxRemoteCandidates Maximum ICE candidates a peer may offer or trickle per connection.
-	 */
 	public function __construct(
 		private readonly IdentityProvider $identityProvider,
 		private readonly IdentityVerifier $identityVerifier,
@@ -89,7 +75,7 @@ final class WebRtcNegotiator implements Negotiator{
 			$offer->validate();
 			$fingerprint = $offer->getFingerprint();
 		}catch(SdpException $e){
-			throw new NegotiationException("Offer is not usable: " . $e->getMessage(), ErrorCode::FAILED_TO_SET_REMOTE_DESCRIPTION, $e);
+			throw new NegotiationException("Offer is invalid: " . $e->getMessage(), ErrorCode::FAILED_TO_SET_REMOTE_DESCRIPTION, $e);
 		}
 
 		$candidateCount = $offer->countCandidates();
@@ -302,9 +288,7 @@ final class WebRtcNegotiator implements Negotiator{
 	}
 
 	/**
-	 * Builds the local SDP answer description with the host identity assertion (`a=identity`) attached.
-	 *
-	 * @return array{string, string}|null
+	 * @phpstan-return array{string, string}|null
 	 *
 	 * @throws CryptoException
 	 * @throws SdpException

@@ -22,9 +22,6 @@ use pocketmine\nethernet\signaling\SignalingInterface;
 use function array_values;
 use function count;
 
-/**
- * Main entry point for running a NetherNet server.
- */
 final class NetherNetServer{
 
 	/**

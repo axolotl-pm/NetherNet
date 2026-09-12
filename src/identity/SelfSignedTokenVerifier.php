@@ -16,14 +16,6 @@ namespace pocketmine\nethernet\identity;
 
 use pocketmine\nethernet\crypto\CryptoException;
 
-/**
- * Verifies that a peer's token is signed by its own public key (`cpk` claim).
- *
- * Suitable for hosts advertising {@link \pocketmine\nethernet\discovery\ServerData::$acceptsSelfSignedAuth},
- * where peers generate their own tokens and are identified by public key rather than by account.
- *
- * This does not authenticate the player with Minecraft Auth Services.
- */
 final class SelfSignedTokenVerifier implements TokenVerifier{
 
 	public function check(JsonWebToken $token) : void{

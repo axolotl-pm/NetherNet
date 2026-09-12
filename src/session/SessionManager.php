@@ -23,9 +23,6 @@ use pocketmine\nethernet\session\framing\Segmenter;
 use function array_values;
 use function count;
 
-/**
- * Manages active client sessions and processes incoming messages.
- */
 final class SessionManager{
 
 	/**
@@ -52,9 +49,6 @@ final class SessionManager{
 	}
 
 	/**
-	 * Registers and initializes a new client session from an established connection.
-	 *
-	 * @param DataChannel[] $channels Keyed by {@link Reliability} case name.
 	 * @phpstan-param array<string, DataChannel> $channels
 	 */
 	public function open(PeerConnection $peerConnection, array $channels, string $networkId, ?PeerIdentity $identity) : Session{
@@ -84,9 +78,6 @@ final class SessionManager{
 	}
 
 	/**
-	 * Adjusts the segmenter to respect the lowest negotiated message size across data channels.
-	 *
-	 * @param DataChannel[] $channels
 	 * @phpstan-param array<string, DataChannel> $channels
 	 */
 	private static function segmenterFor(array $channels, Segmenter $configured) : Segmenter{
@@ -103,9 +94,6 @@ final class SessionManager{
 		return $payload >= 1 && $payload < $configured->getMaxSegmentPayloadSize() ? new Segmenter($payload) : $configured;
 	}
 
-	/**
-	 * Checks active sessions and reads pending incoming messages.
-	 */
 	public function tick() : void{
 		foreach($this->sessions as $session){
 			if(!$session->checkLiveness()){

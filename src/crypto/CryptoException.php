@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\crypto;
 
 use pocketmine\nethernet\NetherNetException;
 
-/**
- * Thrown when cryptographic operations (signatures, keys, encryption) fail.
- */
 class CryptoException extends NetherNetException{
 
 }

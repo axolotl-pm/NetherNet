@@ -32,9 +32,6 @@ use function sprintf;
 use function str_replace;
 use function strlen;
 
-/**
- * Encapsulates a P-384 ECDSA public key in SubjectPublicKeyInfo format.
- */
 final class PublicKey{
 
 	private const CURVE_NAME = "P-384";
@@ -51,8 +48,6 @@ final class PublicKey{
 	){}
 
 	/**
-	 * Parses a `cpk` claim from either a base64 SPKI string or a JWK map.
-	 *
 	 * @throws CryptoException
 	 */
 	public static function fromClaim(mixed $value) : self{
@@ -79,7 +74,6 @@ final class PublicKey{
 	}
 
 	/**
-	 * @param mixed[] $jwk
 	 * @phpstan-param array<array-key, mixed> $jwk
 	 *
 	 * @throws CryptoException
@@ -108,8 +102,6 @@ final class PublicKey{
 	}
 
 	/**
-	 * Wraps uncompressed P-384 coordinates into an ASN.1 SubjectPublicKeyInfo DER structure.
-	 *
 	 * @throws CryptoException
 	 */
 	private static function encodeSubjectPublicKeyInfo(string $x, string $y) : string{
@@ -138,8 +130,6 @@ final class PublicKey{
 	}
 
 	/**
-	 * Extracts the public key from an OpenSSL key handle.
-	 *
 	 * @throws CryptoException
 	 */
 	public static function fromOpenSslKey(\OpenSSLAsymmetricKey $key) : self{
@@ -173,14 +163,10 @@ final class PublicKey{
 
 	public function getOpenSslKey() : \OpenSSLAsymmetricKey{ return $this->key; }
 
-	/** Base64 SubjectPublicKeyInfo string as formatted for a `cpk` claim. */
 	public function toCpk() : string{
 		return base64_encode($this->der);
 	}
 
-	/**
-	 * Returns a stable cryptographic digest of the public key DER bytes.
-	 */
 	public function getDigest(string $algorithm = "sha256") : string{
 		return hash($algorithm, $this->der, binary: true);
 	}

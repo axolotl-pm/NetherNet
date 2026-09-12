@@ -14,9 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\negotiation;
 
-/**
- * Lifecycle states of a WebRTC negotiation.
- */
 enum NegotiationState{
 
 	/**
@@ -25,12 +22,12 @@ enum NegotiationState{
 	case GATHERING;
 
 	/**
-	 * SDP answer generated; waiting for remote peer to open required SCTP data channels.
+	 * SDP answer generated, waiting for remote peer to open required SCTP data channels.
 	 */
 	case ANSWERED;
 
 	/**
-	 * Data channels opened; peer connection ready to transition to an active session.
+	 * Data channels opened - peer connection ready to transition to an active session.
 	 */
 	case ESTABLISHED;
 

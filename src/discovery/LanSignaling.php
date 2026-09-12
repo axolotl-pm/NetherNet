@@ -47,9 +47,6 @@ use const SOCKET_EWOULDBLOCK;
 use const SOL_SOCKET;
 use const SOL_UDP;
 
-/**
- * Handles NetherNet LAN discovery broadcasts and UDP Trickle ICE signaling for peer connections.
- */
 final class LanSignaling implements SignalingInterface{
 
 	public const DEFAULT_PORT = 7551;
@@ -267,9 +264,6 @@ final class LanSignaling implements SignalingInterface{
 		$pending?->negotiation->fail("Peer reported error code " . $signal->data, ErrorCode::GENERIC_FAILURE);
 	}
 
-	/**
-	 * Sends pending SDP answers and gathered Trickle ICE candidates to peers.
-	 */
 	private function advancePending() : void{
 		foreach($this->pending as $key => $pending){
 			$negotiation = $pending->negotiation;

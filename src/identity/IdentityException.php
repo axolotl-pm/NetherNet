@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\identity;
 
 use pocketmine\nethernet\NetherNetException;
 
-/**
- * Thrown when identity verification or assertion parsing fails.
- */
 class IdentityException extends NetherNetException{
 
 }
