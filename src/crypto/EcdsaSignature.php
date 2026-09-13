@@ -46,10 +46,10 @@ final class EcdsaSignature{
 
 		$length = ord($der[1]);
 		if(($length & self::ASN1_LONG_FORM_FLAG) !== 0){
-			throw new CryptoException("Signature uses a long-form DER length, which no ECDSA signature needs");
+			throw new CryptoException("Long-form DER length is not permitted for ECDSA signatures");
 		}
 		if(strlen($der) !== $length + 2){
-			throw new CryptoException("Signature announces $length content bytes but carries " . (strlen($der) - 2));
+			throw new CryptoException("Signature length byte $length does not match actual length " . (strlen($der) - 2));
 		}
 
 		$offset = 2;
@@ -93,7 +93,7 @@ final class EcdsaSignature{
 		$offset += $length;
 
 		if(strlen($value) > $coordinateSize){
-			throw new CryptoException("Integer is wider than the $coordinateSize byte coordinate size");
+			throw new CryptoException("Integer length exceeds coordinate size of $coordinateSize bytes");
 		}
 
 		return str_pad($value, $coordinateSize, "\x00", STR_PAD_LEFT);

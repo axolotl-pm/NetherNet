@@ -149,12 +149,12 @@ final class HttpRequest{
 			throw new HttpException(411, "Content-Length is required");
 		}
 		if(preg_match('/^\d+$/', $value) !== 1){
-			throw new HttpException(400, "Content-Length is not a number");
+			throw new HttpException(400, "Content-Length must be a non-negative integer");
 		}
 
 		$length = (int) $value;
 		if($length > $limit){
-			throw new HttpException(413, "Body of $length bytes exceeds the $limit byte limit");
+			throw new HttpException(413, "Body length ($length bytes) exceeds limit of $limit bytes");
 		}
 
 		return $length;

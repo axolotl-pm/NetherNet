@@ -82,13 +82,13 @@ final class ConnectionBudgetConfiguration{
 			throw new \InvalidArgumentException("Maximum payload size must be between " . ($maxMessageSize - 1) . " and " . Segmenter::MAX_PAYLOAD_SIZE . ", got $maxPayloadSize");
 		}
 		if($maxReceiveQueueSize < $maxMessageSize){
-			throw new \InvalidArgumentException("Maximum receive queue size must be at least one message ($maxMessageSize), got $maxReceiveQueueSize");
+			throw new \InvalidArgumentException("Maximum receive queue size must be at least the size of one message ($maxMessageSize bytes), got $maxReceiveQueueSize");
 		}
 		if($maxReceiveQueueMessages < 1){
 			throw new \InvalidArgumentException("Maximum receive queue message count must be positive, got $maxReceiveQueueMessages");
 		}
 		if($maxSendQueueSize < $maxMessageSize){
-			throw new \InvalidArgumentException("Maximum send queue size must be at least one message ($maxMessageSize), got $maxSendQueueSize");
+			throw new \InvalidArgumentException("Maximum send queue size must be at least the size of one message ($maxMessageSize bytes), got $maxSendQueueSize");
 		}
 		if($maxPendingDataChannels < 2){
 			throw new \InvalidArgumentException("Maximum pending data channels must be at least 2, got $maxPendingDataChannels");

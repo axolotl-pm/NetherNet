@@ -56,7 +56,7 @@ final class Der{
 	}
 
 	/**
-	 * Encodes a BIT STRING whose content is a whole number of bytes (unused bits = 0).
+	 * Encodes a byte-aligned BIT STRING with zero unused bits.
 	 *
 	 * @throws CryptoException
 	 */

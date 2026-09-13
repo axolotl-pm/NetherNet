@@ -78,10 +78,10 @@ final class PacketSerializer{
 			$packet->decodeBody($in);
 
 			if($in->getUnreadLength() !== 0){
-				throw new DiscoveryException("Datagram has " . $in->getUnreadLength() . " bytes left over");
+				throw new DiscoveryException("Datagram has " . $in->getUnreadLength() . " unread bytes remaining");
 			}
 		}catch(DataDecodeException $e){
-			throw new DiscoveryException("Datagram ended early: " . $e->getMessage(), 0, $e);
+			throw new DiscoveryException("Unexpected end of datagram payload: " . $e->getMessage(), 0, $e);
 		}
 
 		return [$packet, $senderId];

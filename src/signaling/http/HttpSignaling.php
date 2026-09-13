@@ -249,7 +249,7 @@ final class HttpSignaling implements SignalingInterface{
 				continue;
 			}
 			if(count($this->connections) >= $this->maxConnections && !$this->evictStalest()){
-				$this->logger?->debug("Refused a signaling connection; all slots are busy");
+				$this->logger?->debug("Refused signaling connection: connection limit of $this->maxConnections reached");
 				socket_close($accepted);
 				continue;
 			}
@@ -445,7 +445,7 @@ final class HttpSignaling implements SignalingInterface{
 
 		if($path === self::PATH_JOIN || $path === self::PATH_JOIN . "/"){
 			if($request->method !== "GET" && $request->method !== "HEAD"){
-				throw new HttpException(405, "Only GET probes this endpoint");
+				throw new HttpException(405, "Method not allowed: endpoint only accepts GET or HEAD requests");
 			}
 
 			return;
@@ -455,7 +455,7 @@ final class HttpSignaling implements SignalingInterface{
 			throw new HttpException(404, "No such endpoint");
 		}
 		if($request->method !== "POST"){
-			throw new HttpException(405, "Offers are posted");
+			throw new HttpException(405, "Method not allowed: SDP offers must be submitted via POST");
 		}
 		if(!$request->hasContentType(self::CONTENT_TYPE_SDP)){
 			throw new HttpException(415, "Offers must be sent as " . self::CONTENT_TYPE_SDP);
@@ -650,7 +650,7 @@ final class HttpSignaling implements SignalingInterface{
 	 */
 	private static function checkNotTls(HttpConnection $connection) : void{
 		if(strlen($connection->input) >= 3 && $connection->input[0] === "\x16" && $connection->input[1] === "\x03"){
-			throw new HttpException(400, "Peer is speaking TLS to a plaintext signaling endpoint; configure a certificate");
+			throw new HttpException(400, "Client initiated a TLS handshake on a plaintext endpoint; TLS certificate is not configured");
 		}
 	}
 
@@ -716,7 +716,7 @@ final class HttpSignaling implements SignalingInterface{
 			return false;
 		}
 
-		$this->logger?->debug("Dropping the stalest signaling connection (" . $this->connections[$stalestId]->peerName() . ") to make room");
+		$this->logger?->debug("Evicting stalest signaling connection (" . $this->connections[$stalestId]->peerName() . ") to accommodate new connection");
 		$this->disconnect($this->connections[$stalestId]);
 		unset($this->connections[$stalestId]);
 

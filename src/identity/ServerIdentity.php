@@ -104,7 +104,7 @@ final class ServerIdentity{
 	private function readComponents() : array{
 		$details = openssl_pkey_get_details($this->privateKey);
 		if($details === false || !isset($details["ec"]) || !is_array($details["ec"])){
-			throw new CryptoException("Could not read the key components out of the OpenSSL handle");
+			throw new CryptoException("Failed to extract key components from OpenSSL key: " . OpenSsl::lastError());
 		}
 
 		$components = [];

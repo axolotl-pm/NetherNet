@@ -62,12 +62,12 @@ final class Assembler{
 		$remaining = ord($segment[0]);
 		if(!$this->fragmentationAllowed && $remaining !== 0){
 			$this->reset();
-			throw new FramingException("Channel does not support fragmentation, but a segment announced $remaining more to come");
+			throw new FramingException("Channel does not support fragmentation, but received a segment with remaining count $remaining");
 		}
 		if($this->remaining > 0 && $remaining !== $this->remaining - 1){
 			$expected = $this->remaining - 1;
 			$this->reset();
-			throw new FramingException("Expected a segment $expected more to come, got $remaining");
+			throw new FramingException("Expected segment countdown $expected, got $remaining");
 		}
 
 		if(strlen($this->buffer) + $length - 1 > $this->maxPayloadSize){

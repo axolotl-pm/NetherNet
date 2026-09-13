@@ -237,7 +237,7 @@ final class LanSignaling implements SignalingInterface{
 			return;
 		}
 		if(count($this->pending) >= $this->maxPending){
-			$this->logger?->debug("Refusing an offer from $senderId; $this->maxPending joins are already in flight");
+			$this->logger?->debug("Refused offer from $senderId: maximum pending connections limit reached ($this->maxPending)");
 			$this->sendSignal($senderId, new Signal(SignalType::CONNECT_ERROR, $signal->connectionId, (string) ErrorCode::GENERIC_FAILURE->value), $address, $port);
 
 			return;
@@ -268,7 +268,7 @@ final class LanSignaling implements SignalingInterface{
 		try{
 			$pending->negotiation->addRemoteCandidate($signal->data);
 		}catch(NegotiationException $e){
-			$this->logger?->debug("Peer sent a candidate we cannot use: " . $e->getMessage());
+			$this->logger?->debug("Peer sent an unusable ICE candidate: " . $e->getMessage());
 		}
 	}
 

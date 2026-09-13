@@ -129,7 +129,7 @@ final class NetherNetServer{
 		foreach($this->negotiator->takeEstablished() as $peer){
 			$address = self::stripPort($peer->peerConnection->getRemoteAddress());
 			if($address !== null && $this->blockTracker->isBlocked($address)){
-				$this->logger?->debug("Closed connection from $address due to being blocked");
+				$this->logger?->debug("Closed connection from blocked address: $address");
 				try{
 					$peer->peerConnection->close();
 				}catch(WebRtcException){

@@ -24,7 +24,7 @@ final class SelfSignedIdentityProvider implements IdentityProvider{
 
 	/**
 	 * @param string $domain               Partner domain identifier advertised in the `idp` object (default "self").
-	 * @param int    $tokenLifetimeSeconds Validity lifetime for the minted Server Identity JWT in seconds.
+	 * @param int    $tokenLifetimeSeconds Validity lifetime for the issued Server Identity JWT in seconds.
 	 */
 	public function __construct(
 		private readonly ServerIdentity $identity,

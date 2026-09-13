@@ -100,7 +100,7 @@ final class WebRtcNegotiator implements Negotiator{
 		}catch(WebRtcException $e){
 			$this->discard($peerConnection);
 
-			throw new NegotiationException("Offer was rejected by the WebRTC stack: " . $e->getMessage(), ErrorCode::FAILED_TO_SET_REMOTE_DESCRIPTION, $e);
+			throw new NegotiationException("WebRTC peer connection failure: " . $e->getMessage(), ErrorCode::FAILED_TO_SET_REMOTE_DESCRIPTION, $e);
 		}
 
 		$negotiation = new WebRtcNegotiation(
@@ -143,7 +143,7 @@ final class WebRtcNegotiator implements Negotiator{
 			try{
 				$this->advance($negotiation, $now);
 			}catch(WebRtcException $e){
-				$negotiation->fail("WebRTC stack failed: " . $e->getMessage(), ErrorCode::FAILED_TO_CREATE_PEER_CONNECTION);
+				$negotiation->fail("WebRTC peer connection failure: " . $e->getMessage(), ErrorCode::FAILED_TO_CREATE_PEER_CONNECTION);
 			}
 
 			if($negotiation->isFinished()){
@@ -273,12 +273,12 @@ final class WebRtcNegotiator implements Negotiator{
 			}
 
 			if($matched === null){
-				$negotiation->fail("Peer opened a channel this protocol does not define: " . $channel->getLabel(), ErrorCode::DATA_CHANNEL_CLOSED);
+				$negotiation->fail("Unsupported data channel label: " . $channel->getLabel(), ErrorCode::DATA_CHANNEL_CLOSED);
 
 				return;
 			}
 			if($negotiation->hasChannel($matched)){
-				$negotiation->fail("Peer opened the " . $matched->getChannelLabel() . " twice", ErrorCode::DATA_CHANNEL_CLOSED);
+				$negotiation->fail("Duplicate data channel opened: " . $matched->getChannelLabel(), ErrorCode::DATA_CHANNEL_CLOSED);
 
 				return;
 			}

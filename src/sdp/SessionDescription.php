@@ -169,10 +169,10 @@ final class SessionDescription{
 
 		$size = (int) $value;
 		if($size > self::MAX_MESSAGE_SIZE_LIMIT){
-			throw new SdpException("Attribute " . self::ATTRIBUTE_MAX_MESSAGE_SIZE . " is wider than 32 bits: $value");
+			throw new SdpException("Attribute " . self::ATTRIBUTE_MAX_MESSAGE_SIZE . " exceeds 32-bit unsigned integer limit, got $size");
 		}
 		if($size <= 1){
-			throw new SdpException("Attribute " . self::ATTRIBUTE_MAX_MESSAGE_SIZE . " must exceed one byte, got $size");
+			throw new SdpException("Attribute " . self::ATTRIBUTE_MAX_MESSAGE_SIZE . " must be greater than 1, got $size");
 		}
 
 		return $size;

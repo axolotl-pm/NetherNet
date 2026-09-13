@@ -146,7 +146,7 @@ final class PublicKey{
 	private static function extractDer(\OpenSSLAsymmetricKey $key) : string{
 		$details = openssl_pkey_get_details($key);
 		if($details === false || !isset($details["key"]) || !is_string($details["key"])){
-			throw new CryptoException("Could not read the public key out of the OpenSSL handle");
+			throw new CryptoException("Failed to extract public key from OpenSSL key: " . OpenSsl::lastError());
 		}
 
 		if(preg_match("@^-----BEGIN[A-Z\d ]+PUBLIC KEY-----\n([A-Za-z\d+/\n=]+)\n-----END[A-Z\d ]+PUBLIC KEY-----\n$@", $details["key"], $matches) !== 1){

@@ -54,7 +54,7 @@ final class ReverseProxy{
 		array $networks = []
 	){
 		if(count($headers) === 0){
-			throw new \InvalidArgumentException("At least one header is needed to find the client address");
+			throw new \InvalidArgumentException("At least one header must be specified to resolve client address");
 		}
 		foreach($networks as $network){
 			$this->networks[] = self::parseNetwork($network);
@@ -167,7 +167,7 @@ final class ReverseProxy{
 		if(str_contains($network, "/")){
 			[$address, $prefixString] = explode("/", $network, 2);
 			if(!is_numeric($prefixString)){
-				throw new \InvalidArgumentException("Network \"$network\" has a prefix length that is not a number");
+				throw new \InvalidArgumentException("Network \"$network\" has a non-numeric CIDR prefix length");
 			}
 			$prefix = (int) $prefixString;
 		}
@@ -180,7 +180,7 @@ final class ReverseProxy{
 		$bits = strlen($packed) * 8;
 		$prefix ??= $bits;
 		if($prefix < 0 || $prefix > $bits){
-			throw new \InvalidArgumentException("Network \"$network\" has a prefix length outside 0-$bits");
+			throw new \InvalidArgumentException("Network \"$network\" prefix length must be between 0 and $bits");
 		}
 
 		return [$packed, $prefix];

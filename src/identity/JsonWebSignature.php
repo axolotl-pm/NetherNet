@@ -90,7 +90,7 @@ final class JsonWebSignature{
 	public static function verifyDetached(string $detached, string $payload, PublicKey $publicKey) : bool{
 		$parts = explode(".", $detached, limit: 4);
 		if(count($parts) !== 3){
-			throw new CryptoException("Detached signature must have exactly three period-separated parts");
+			throw new CryptoException("Detached signature must consist of exactly three dot-separated parts, got " . count($parts));
 		}
 		if($parts[1] !== ""){
 			throw new CryptoException("Detached signature must not carry a payload");

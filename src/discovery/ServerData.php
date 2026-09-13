@@ -97,7 +97,7 @@ final class ServerData{
 		try{
 			$version = Byte::readUnsigned($in);
 			if($version !== self::VERSION){
-				throw new DiscoveryException("Expected advert version " . self::VERSION . ", got $version");
+				throw new DiscoveryException("Expected server advertisement version " . self::VERSION . ", got $version");
 			}
 
 			$serverName = self::readString($in);
@@ -126,10 +126,10 @@ final class ServerData{
 			$connectionType = VarInt::readSignedInt($in);
 
 			if($in->getUnreadLength() !== 0){
-				throw new DiscoveryException("Advert has " . $in->getUnreadLength() . " bytes left over");
+				throw new DiscoveryException("Datagram has " . $in->getUnreadLength() . " unread bytes remaining");
 			}
 		}catch(DataDecodeException $e){
-			throw new DiscoveryException("Advert ended too early: " . $e->getMessage(), 0, $e);
+			throw new DiscoveryException("Unexpected end of datagram payload: " . $e->getMessage(), 0, $e);
 		}
 
 		return new self(

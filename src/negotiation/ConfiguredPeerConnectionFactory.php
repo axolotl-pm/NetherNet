@@ -34,7 +34,7 @@ final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 		private readonly int $mtu = 1200
 	){
 		if(($portRangeBegin === null) !== ($portRangeEnd === null)){
-			throw new \InvalidArgumentException("Port range needs both a start and an end, or neither");
+			throw new \InvalidArgumentException("Both port range begin and end must be specified together, or both must be null");
 		}
 		if($portRangeBegin !== null && ($portRangeBegin < 1 || $portRangeBegin > 65535)){
 			throw new \InvalidArgumentException("Port range start must be between 1 and 65535, got $portRangeBegin");
@@ -43,7 +43,7 @@ final class ConfiguredPeerConnectionFactory implements PeerConnectionFactory{
 			throw new \InvalidArgumentException("Port range end must be between 1 and 65535, got $portRangeEnd");
 		}
 		if($portRangeBegin !== null && $portRangeEnd !== null && $portRangeBegin > $portRangeEnd){
-			throw new \InvalidArgumentException("Port range start $portRangeBegin is above its end $portRangeEnd");
+			throw new \InvalidArgumentException("Port range start ($portRangeBegin) cannot be greater than end ($portRangeEnd)");
 		}
 		if($iceUdpMuxEnabled){
 			foreach($iceServers as $iceServer){

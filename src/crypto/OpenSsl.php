@@ -41,7 +41,7 @@ final class OpenSsl{
 	 */
 	public static function padCoordinate(string $value, int $size) : string{
 		if(strlen($value) > $size){
-			throw new CryptoException("Curve component is " . strlen($value) . " bytes, wider than the $size the curve allows");
+			throw new CryptoException("Curve component length (" . strlen($value) . " bytes) exceeds maximum curve coordinate size ($size bytes)");
 		}
 
 		return str_pad($value, $size, "\x00", STR_PAD_LEFT);

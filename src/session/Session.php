@@ -63,7 +63,7 @@ final class Session{
 		$assemblers = [];
 		foreach(Reliability::cases() as $reliability){
 			if(!isset($channels[$reliability->name])){
-				throw new \InvalidArgumentException("Missing the " . $reliability->getChannelLabel() . " channel");
+				throw new \InvalidArgumentException("Missing required channel: " . $reliability->getChannelLabel());
 			}
 			$assemblers[$reliability->name] = new Assembler($reliability->isFragmentationSupported(), $budget->maxPayloadSize);
 		}
@@ -105,7 +105,7 @@ final class Session{
 			return;
 		}
 		if(count($segments) > 1 && !$reliability->isFragmentationSupported()){
-			throw new SessionException("Payload needs " . count($segments) . " segments, but the " . $reliability->getChannelLabel() . " cannot fragment");
+			throw new SessionException("Payload requires " . count($segments) . " segments, but " . $reliability->getChannelLabel() . " does not support fragmentation");
 		}
 
 		try{
@@ -116,7 +116,7 @@ final class Session{
 		}catch(WebRtcException $e){
 			$this->close(DisconnectReason::SEND_FAILED);
 
-			throw new SessionException("Failed to send on the " . $reliability->getChannelLabel() . ": " . $e->getMessage(), 0, $e);
+			throw new SessionException("Failed to send on channel " . $reliability->getChannelLabel() . ": " . $e->getMessage(), 0, $e);
 		}
 	}
 
@@ -144,7 +144,7 @@ final class Session{
 			}catch(FramingException|WebRtcException $e){
 				$this->close(DisconnectReason::BAD_DATA);
 
-				throw new SessionException("Bad data on the " . $reliability->getChannelLabel() . ": " . $e->getMessage(), 0, $e);
+				throw new SessionException("Bad data on channel " . $reliability->getChannelLabel() . ": " . $e->getMessage(), 0, $e);
 			}
 		}
 

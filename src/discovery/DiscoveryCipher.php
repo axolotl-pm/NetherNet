@@ -63,7 +63,7 @@ final class DiscoveryCipher{
 
 		$ciphertext = substr($frame, self::CHECKSUM_SIZE);
 		if(strlen($ciphertext) % self::BLOCK_SIZE !== 0){
-			throw new DiscoveryException("Ciphertext is not a whole number of blocks");
+			throw new DiscoveryException("Ciphertext length must be a multiple of the block size (16 bytes)");
 		}
 
 		$key = self::key();
