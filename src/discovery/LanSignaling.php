@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\discovery;
 
+use pocketmine\nethernet\AddressBlockTracker;
 use pocketmine\nethernet\discovery\packet\MessagePacket;
 use pocketmine\nethernet\discovery\packet\Packet;
 use pocketmine\nethernet\discovery\packet\PacketSerializer;
@@ -70,6 +71,8 @@ final class LanSignaling implements SignalingInterface{
 	 */
 	private array $pending = [];
 
+	private AddressBlockTracker $blockTracker;
+
 	private bool $closed = false;
 
 	/**
@@ -90,9 +93,15 @@ final class LanSignaling implements SignalingInterface{
 		if($maxPending < 1){
 			throw new \InvalidArgumentException("Maximum pending connections must be positive, got $maxPending");
 		}
+
+		$this->blockTracker = new AddressBlockTracker();
 	}
 
 	public function getNetworkId() : int{ return $this->networkId; }
+
+	public function setAddressBlockTracker(AddressBlockTracker $blockTracker) : void{
+		$this->blockTracker = $blockTracker;
+	}
 
 	public function start() : void{
 		if($this->socket !== null){
@@ -167,6 +176,10 @@ final class LanSignaling implements SignalingInterface{
 				$this->logger?->debug("LAN discovery read failed: " . socket_strerror($error));
 
 				return;
+			}
+
+			if($this->blockTracker->isBlocked($from)){
+				continue;
 			}
 
 			try{

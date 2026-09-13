@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\http;
 
+use pocketmine\nethernet\AddressBlockTracker;
 use pocketmine\nethernet\crypto\OpenSsl;
 use pocketmine\nethernet\negotiation\NegotiationException;
 use pocketmine\nethernet\negotiation\Negotiator;
@@ -103,6 +104,8 @@ final class HttpSignaling implements SignalingInterface{
 	 */
 	private array $connections = [];
 
+	private AddressBlockTracker $blockTracker;
+
 	private int $nextConnectionId = 0;
 	private bool $closed = false;
 
@@ -124,6 +127,12 @@ final class HttpSignaling implements SignalingInterface{
 		if($maxConnections < 1){
 			throw new \InvalidArgumentException("Maximum connections must be positive, got $maxConnections");
 		}
+
+		$this->blockTracker = new AddressBlockTracker();
+	}
+
+	public function setAddressBlockTracker(AddressBlockTracker $blockTracker) : void{
+		$this->blockTracker = $blockTracker;
 	}
 
 	public function start() : void{
@@ -182,15 +191,8 @@ final class HttpSignaling implements SignalingInterface{
 	/**
 	 * Exports the accepted socket descriptor into a non-blocking stream for TLS and HTTP I/O.
 	 */
-	private function adopt(\Socket $connection, float $now) : ?HttpConnection{
+	private function adopt(\Socket $connection, string $peerAddress, int $peerPort, float $now) : ?HttpConnection{
 		socket_set_nonblock($connection);
-
-		$peerAddress = "";
-		$peerPort = 0;
-		if(!@socket_getpeername($connection, $peerAddress, $peerPort)){
-			$peerAddress = "";
-			$peerPort = 0;
-		}
 
 		$stream = socket_export_stream($connection);
 		if($stream === false){
@@ -234,13 +236,25 @@ final class HttpSignaling implements SignalingInterface{
 		socket_clear_error();
 
 		while(($accepted = @socket_accept($socket)) !== false){
+			$peerAddress = "";
+			$peerPort = 0;
+			if(!@socket_getpeername($accepted, $peerAddress, $peerPort)){
+				$peerAddress = "";
+				$peerPort = 0;
+			}
+
+			if($this->blockTracker->isBlocked($peerAddress)){
+				$this->logger?->debug("Dropped a signaling connection from blocked address $peerAddress");
+				socket_close($accepted);
+				continue;
+			}
 			if(count($this->connections) >= $this->maxConnections && !$this->evictStalest()){
 				$this->logger?->debug("Refused a signaling connection; all slots are busy");
 				socket_close($accepted);
 				continue;
 			}
 
-			$connection = $this->adopt($accepted, $now);
+			$connection = $this->adopt($accepted, $peerAddress, $peerPort, $now);
 			if($connection === null){
 				continue;
 			}
@@ -469,19 +483,25 @@ final class HttpSignaling implements SignalingInterface{
 			throw new HttpException(500, "Dispatching a request that was never parsed");
 		}
 
-		$path = $request->getPath();
-		if($path === self::PATH_JOIN || $path === self::PATH_JOIN . "/"){
-			$this->respondToProbe($connection);
-
-			return;
-		}
-
 		$peerAddress = $connection->peerAddress !== "" ? $connection->peerAddress : null;
 		if($peerAddress !== null && $this->reverseProxy !== null && $this->reverseProxy->trusts($peerAddress)){
 			$peerAddress = $this->reverseProxy->clientAddress($request);
 			if($peerAddress === null){
 				$this->logger?->debug($connection->peerName() . ": no client address in the proxy headers");
 			}
+		}
+		if($peerAddress !== null && $this->blockTracker->isBlocked($peerAddress)){
+			$this->logger?->debug($connection->peerName() . ": dropped a request from $peerAddress, which is blocked");
+			$connection->state = HttpConnectionState::DONE;
+
+			return;
+		}
+
+		$path = $request->getPath();
+		if($path === self::PATH_JOIN || $path === self::PATH_JOIN . "/"){
+			$this->respondToProbe($connection);
+
+			return;
 		}
 
 		try{

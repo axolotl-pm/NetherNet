@@ -15,6 +15,7 @@ declare(strict_types=1);
 namespace pocketmine\nethernet\discovery;
 
 use PHPUnit\Framework\TestCase;
+use pocketmine\nethernet\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\discovery\packet\MessagePacket;
 use pocketmine\nethernet\discovery\packet\PacketSerializer;
 use pocketmine\nethernet\discovery\packet\RequestPacket;
@@ -23,6 +24,10 @@ use pocketmine\nethernet\FakeNegotiator;
 use pocketmine\nethernet\negotiation\CandidateMode;
 use pocketmine\nethernet\negotiation\ErrorCode;
 use pocketmine\nethernet\negotiation\Negotiator;
+use pocketmine\nethernet\NetherNetServer;
+use pocketmine\nethernet\NullEventListener;
+use pocketmine\nethernet\session\SessionManager;
+use pocketmine\nethernet\signaling\SignalingException;
 use function random_int;
 use function socket_bind;
 use function socket_close;
@@ -92,7 +97,7 @@ final class LanSignalingTest extends TestCase{
 
 			try{
 				$signaling->start();
-			}catch(\pocketmine\nethernet\signaling\SignalingException){
+			}catch(SignalingException){
 				continue;
 			}
 
@@ -100,6 +105,34 @@ final class LanSignalingTest extends TestCase{
 			$this->hostPort = $port;
 
 			return;
+		}
+
+		self::fail("Could not find a free port to listen on");
+	}
+
+	private function startServer(Negotiator $negotiator) : NetherNetServer{
+		for($attempt = 0; $attempt < 20; ++$attempt){
+			$port = random_int(20000, 60000);
+			$server = new NetherNetServer($negotiator, new SessionManager(new NullEventListener(), new ConnectionBudgetConfiguration()));
+			$signaling = new LanSignaling(
+				$negotiator,
+				new FixedServerDataProvider(new ServerData(serverName: "test host", levelName: "test world")),
+				self::HOST_NETWORK_ID,
+				"127.0.0.1",
+				$port
+			);
+			$server->addSignaling($signaling);
+
+			try{
+				$server->start();
+			}catch(SignalingException){
+				continue;
+			}
+
+			$this->signaling = $signaling;
+			$this->hostPort = $port;
+
+			return $server;
 		}
 
 		self::fail("Could not find a free port to listen on");
@@ -276,6 +309,25 @@ final class LanSignalingTest extends TestCase{
 		}finally{
 			socket_close($impostor);
 		}
+	}
+
+	/**
+	 * A block is placed on the server, but it is the transport that sees the datagrams, so this
+	 * is what shows the two are connected. Nothing a blocked peer sends is looked at, not even
+	 * a discovery request.
+	 */
+	public function testBlockPlacedOnTheServerReachesTheTransport() : void{
+		$server = $this->startServer(new FakeNegotiator("answer-sdp"));
+
+		$server->blockAddress("127.0.0.1", -1);
+		$this->sendToHost(new RequestPacket());
+		self::assertNull($this->receive(), "the host answered a blocked address");
+
+		$server->unblockAddress("127.0.0.1");
+		$this->sendToHost(new RequestPacket());
+		self::assertNotNull($this->receive(), "the host stayed silent after the block was lifted");
+
+		$server->shutdown();
 	}
 
 	public function testBoundSocketReportsTheExpectedAddress() : void{

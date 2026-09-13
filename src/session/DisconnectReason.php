@@ -67,6 +67,11 @@ enum DisconnectReason : int{
 	case SEND_QUEUE_TOO_MANY_BYTES = 9;
 
 	/**
+	 * The remote address is blocked by the server.
+	 */
+	case ADDRESS_BLOCKED = 10;
+
+	/**
 	 * Returns a human-readable fallback description for logging.
 	 */
 	public function getMessage() : string{
@@ -80,7 +85,8 @@ enum DisconnectReason : int{
 			self::SEND_FAILED => "failed to send",
 			self::RECEIVE_QUEUE_TOO_MANY_BYTES => "too many unread bytes queued",
 			self::RECEIVE_QUEUE_TOO_MANY_MESSAGES => "too many unread messages queued",
-			self::SEND_QUEUE_TOO_MANY_BYTES => "too many unsent bytes queued"
+			self::SEND_QUEUE_TOO_MANY_BYTES => "too many unsent bytes queued",
+			self::ADDRESS_BLOCKED => "address blocked"
 		};
 	}
 }

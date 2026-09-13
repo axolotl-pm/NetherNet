@@ -14,7 +14,14 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling;
 
+use pocketmine\nethernet\AddressBlockTracker;
+
 interface SignalingInterface{
+
+	/**
+	 * Sets the address block tracker to use for blocking incoming connection requests.
+	 */
+	public function setAddressBlockTracker(AddressBlockTracker $blockTracker) : void;
 
 	/**
 	 * Starts listening for incoming connection requests.
