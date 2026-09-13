@@ -3,7 +3,7 @@
 A PHP implementation of **NetherNet**, the WebRTC DataChannel transport used by Minecraft: Bedrock Edition. Built on [ext-webrtc](https://github.com/axolotl-pm/ext-webrtc).
 
 > [!WARNING]
-> Experimental! The API is not finalized yet and is not shielded by API constraints.
+> If you're from PocketMine-MP, the API is not shielded by API constraints because it's part of network layer.
 > Expect things to be changed over release.
 
 ## Requirements
@@ -77,3 +77,7 @@ while($server->isRunning()){
     usleep(10_000); // 10ms tick
 }
 ```
+
+## Libraries used for creating project
+- [go-nethernet](https://github.com/df-mc/go-nethernet): A Go implementation of NetherNet, used as a reference for protocol details.
+- [ext-webrtc](https://github.com/axolotl-pm/ext-webrtc): A PHP bindings for DataChannel, used for implementing the transport layer of NetherNet.
