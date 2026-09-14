@@ -151,6 +151,36 @@ final class Session{
 		return null;
 	}
 
+	/**
+	 * Returns an amount of bytes sent over the network for this session.
+	 */
+	public function getBytesSent() : int{
+		if($this->closed){
+			return 0;
+		}
+		return $this->peerConnection->getBytesSent();
+	}
+
+	/**
+	 * Returns an amount of bytes received over the network for this session.
+	 */
+	public function getBytesReceived() : int{
+		if($this->closed){
+			return 0;
+		}
+		return $this->peerConnection->getBytesReceived();
+	}
+
+	/**
+	 * Returns the round trip time to the peer in milliseconds, or null before SCTP has measured one.
+	 */
+	public function getRoundTripTime() : ?int{
+		if($this->closed){
+			return null;
+		}
+		return $this->peerConnection->getRoundTripTime();
+	}
+
 	public function checkLiveness() : bool{
 		if($this->closed){
 			return false;
