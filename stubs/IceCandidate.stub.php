@@ -21,7 +21,7 @@ final class IceCandidate
     /**
      * The candidate line is accepted with or without its "a=" prefix. A null
      * media identifier lets the connection fill one in from the remote
-     * description, which is what a peer with a single bundled m-line wants.
+     * description, suitable for peers using a single bundled m-line.
      *
      * @throws WebRtcException if the candidate line cannot be parsed
      */

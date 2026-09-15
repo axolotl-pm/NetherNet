@@ -31,6 +31,7 @@ final class ServerConfiguration{
 	 * @param float                         $gatheringTimeout      Timeout in seconds for ICE candidate gathering.
 	 * @param float                         $channelTimeout        Timeout in seconds for data channels to open.
 	 * @param int                           $maxRemoteCandidates   Maximum ICE candidates a peer may offer or trickle per connection.
+	 * @param SctpConfiguration|null        $sctp                  SCTP heartbeat and retransmission configuration, or null for the libdatachannel defaults.
 	 */
 	public function __construct(
 		public readonly IdentityProvider $identityProvider,
@@ -40,7 +41,8 @@ final class ServerConfiguration{
 		public readonly float $gatheringTimeout = 15.0,
 		public readonly float $channelTimeout = 5.0,
 		public readonly int $maxRemoteCandidates = WebRtcNegotiator::DEFAULT_MAX_REMOTE_CANDIDATES,
-		public readonly ?\Logger $logger = null
+		public readonly ?\Logger $logger = null,
+		public readonly ?SctpConfiguration $sctp = null
 	){
 		if($maxRemoteCandidates < 1){
 			throw new \InvalidArgumentException("Maximum remote candidates must be positive, got $maxRemoteCandidates");

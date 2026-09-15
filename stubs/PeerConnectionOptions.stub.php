@@ -75,7 +75,7 @@ final class PeerConnectionOptions
      * are refused. 0 removes the limit.
      *
      * A channel stays alive until pollDataChannels() hands it over, so this
-     * bounds what a peer can make this process hold on to.
+     * limits memory consumption from uncollected channels.
      */
     public function setMaxPendingDataChannels(int $count): PeerConnectionOptions {}
 
@@ -108,7 +108,7 @@ final class PeerConnectionOptions
      * parsed until a PeerConnection is constructed from these options.
      *
      * @throws \ValueError if a path contains a null byte, or names a file that
-     *                     cannot be read or that open_basedir puts out of reach
+     *                     cannot be read or is restricted by open_basedir
      */
     public function setCertificate(string $certPemFile, string $keyPemFile, ?string $keyPemPass = null): PeerConnectionOptions {}
 

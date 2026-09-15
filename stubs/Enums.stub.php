@@ -60,9 +60,8 @@ enum SignalingState: int
 /**
  * Which candidate types a connection is allowed to use.
  *
- * RELAY forces every path through a TURN server, which is what a peer behind a
- * NAT that refuses to be traversed is left with, and it also keeps the local
- * addresses out of the candidates the other side sees.
+ * RELAY forces every path through a TURN server for peers behind symmetric
+ * NATs, and keeps local addresses out of candidate lists.
  */
 enum TransportPolicy: int
 {

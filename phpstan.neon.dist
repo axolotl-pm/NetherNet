@@ -18,6 +18,7 @@ parameters:
 	#TODO: Remove this once ext-webrtc ships a stable release to analyse against
 	stubFiles:
 		- stubs/constants.stub.php
+		- stubs/functions.stub.php
 		- stubs/Enums.stub.php
 		- stubs/WebRtcException.stub.php
 		- stubs/IceServer.stub.php

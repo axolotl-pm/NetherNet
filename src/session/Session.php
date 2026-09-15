@@ -229,19 +229,27 @@ final class Session{
 		}
 
 		if($state === ConnectionState::CLOSED){
-			$this->close(DisconnectReason::PEER_DISCONNECT);
+			$this->close($this->getTransportDisconnectReason());
 
 			return false;
 		}
 		foreach(Reliability::cases() as $reliability){
 			if($this->channels[$reliability->name]->isClosed()){
-				$this->close(DisconnectReason::PEER_DISCONNECT);
+				$this->close($this->getTransportDisconnectReason());
 
 				return false;
 			}
 		}
 
 		return true;
+	}
+
+	/**
+	 * Determines the disconnect reason from the transport failure state.
+	 * Distinguishes ICE consent failures (FAILED) from clean or unclassified closures (CLOSED/DISCONNECTED).
+	 */
+	private function getTransportDisconnectReason() : DisconnectReason{
+		return $this->peerConnection->getFailureState() === ConnectionState::FAILED ? DisconnectReason::CONNECTION_FAILED : DisconnectReason::PEER_DISCONNECT;
 	}
 
 	/**

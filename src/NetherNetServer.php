@@ -51,6 +51,8 @@ final class NetherNetServer{
 	 * Creates a server instance using the provided configuration and event listener.
 	 */
 	public static function create(ServerConfiguration $configuration, ServerEventListener $listener) : self{
+		$configuration->sctp?->apply();
+
 		return new self(
 			new WebRtcNegotiator(
 				$configuration->identityProvider,

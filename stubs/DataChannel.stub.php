@@ -60,11 +60,9 @@ final class DataChannel
     /**
      * Take the next message, or null if none has arrived.
      *
-     * @throws WebRtcException once the channel has overrun its share of the
-     *                         connection's receive queue. A message was
-     *                         dropped at that point, so every later call
-     *                         throws too rather than hand back a stream with
-     *                         a hole in it.
+     * @throws WebRtcException if the channel exceeds its share of the
+     *                         connection receive queue, indicating a dropped
+     *                         message.
      */
     public function receive(): ?string {}
 

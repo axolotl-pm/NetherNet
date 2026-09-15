@@ -80,6 +80,16 @@ final class PeerConnection
     public function getState(): ConnectionState {}
 
     /**
+     * Returns the failure state (FAILED or DISCONNECTED) encountered before
+     * transitioning to CLOSED, or null if none was reported.
+     *
+     * Because polling getState() transitions directly from CONNECTED to CLOSED,
+     * this preserves the intermediate failure state observed by the callback.
+     * FAILED takes precedence over DISCONNECTED.
+     */
+    public function getFailureState(): ?ConnectionState {}
+
+    /**
      * Where the connection sits in the offer/answer exchange.
      *
      * This is what tells an offerer that getLocalDescription() is currently an

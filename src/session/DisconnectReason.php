@@ -17,7 +17,7 @@ namespace pocketmine\nethernet\session;
 enum DisconnectReason : int{
 
 	/**
-	 * The remote client closed the connection or data channels.
+	 * The remote client closed the connection or data channels, or the SCTP association was lost to missed heartbeats.
 	 */
 	case PEER_DISCONNECT = 0;
 
@@ -37,7 +37,7 @@ enum DisconnectReason : int{
 	case REJECTED_BY_HOST = 3;
 
 	/**
-	 * The underlying WebRTC peer connection failed.
+	 * The underlying WebRTC peer connection failed (e.g. ICE consent check timeout).
 	 */
 	case CONNECTION_FAILED = 4;
 
