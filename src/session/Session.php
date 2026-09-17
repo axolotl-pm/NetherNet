@@ -299,5 +299,10 @@ final class Session{
 		if($this->closed){
 			throw new SessionException("Session is closed" . ($this->disconnectReason !== null ? ": " . $this->disconnectReason->getMessage() : ""));
 		}
+		foreach($this->channels as $channel){
+			if($channel->isClosed()){
+				throw new SessionException("DataChannel of current session is closed");
+			}
+		}
 	}
 }
