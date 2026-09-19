@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\sdp;
 
+use function array_map;
 use function array_slice;
 use function array_values;
 use function count;
@@ -211,6 +212,37 @@ final class SessionDescription{
 		}
 
 		return new self($lines, self::findMediaStart($lines));
+	}
+
+	/**
+	 * Returns a copy whose ICE candidates are replaced with the given ones, placed at the position of the first
+	 * candidate (before end-of-candidates, or at the end of the media section if none exist).
+	 *
+	 * @param string[] $candidates candidate attribute values, without the "a=candidate:" prefix
+	 * @phpstan-param list<string> $candidates
+	 */
+	public function withCandidates(array $candidates) : self{
+		$lines = [];
+		$insertAt = null;
+		foreach($this->lines as $line){
+			if(str_starts_with($line, "a=candidate:")){
+				$insertAt ??= count($lines);
+				continue;
+			}
+			if($line === "a=end-of-candidates"){
+				$insertAt ??= count($lines);
+			}
+			$lines[] = $line;
+		}
+		$insertAt ??= count($lines);
+
+		$merged = array_values([
+			...array_slice($lines, 0, $insertAt),
+			...array_map(static fn(string $candidate) : string => "a=candidate:" . $candidate, $candidates),
+			...array_slice($lines, $insertAt)
+		]);
+
+		return new self($merged, self::findMediaStart($merged));
 	}
 
 	public function countCandidates() : int{

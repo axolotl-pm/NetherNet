@@ -19,6 +19,7 @@ use function array_merge;
 use function count;
 use function explode;
 use function implode;
+use function in_array;
 use function str_starts_with;
 use function strtolower;
 use function substr;
@@ -60,8 +61,58 @@ final class IceCandidateFormatter{
 			return null;
 		}
 
+		return "candidate:" . self::serverReflexive("signaling", $address, $port);
+	}
+
+	/**
+	 * Rewrites gathered candidates so that clients are only offered the specified addresses. Candidates on any other
+	 * address are dropped, and addresses not matching any gathered candidate are announced as server-reflexive on
+	 * the port of the first UDP host candidate, simulating a 1:1 port-forwarded NAT.
+	 *
+	 * @param string[] $candidates candidate attribute values, without the "a=candidate:" prefix
+	 * @phpstan-param list<string> $candidates
+	 * @param string[] $addresses
+	 * @phpstan-param list<string> $addresses
+	 *
+	 * @return string[]
+	 * @phpstan-return list<string>
+	 */
+	public static function advertise(array $candidates, array $addresses) : array{
+		$kept = [];
+		$matchedAddresses = [];
+		$port = null;
+		foreach($candidates as $candidate){
+			$parts = explode(" ", $candidate);
+			if(count($parts) < 8 || $parts[6] !== "typ"){
+				continue;
+			}
+			if($port === null && $parts[7] === "host" && strtolower($parts[2]) === "udp"){
+				$port = $parts[5];
+			}
+			if(in_array($parts[4], $addresses, true)){
+				$kept[] = $candidate;
+				$matchedAddresses[$parts[4]] = true;
+			}
+		}
+		if($port === null){
+			return $kept;
+		}
+
+		foreach($addresses as $address){
+			if(!isset($matchedAddresses[$address])){
+				$kept[] = self::serverReflexive("advertised", $address, $port);
+			}
+		}
+
+		return $kept;
+	}
+
+	/**
+	 * Builds a server-reflexive candidate attribute value with an unknown base, as `raddr 0.0.0.0 rport 0`.
+	 */
+	private static function serverReflexive(string $foundation, string $address, string $port) : string{
 		return implode(" ", [
-			"candidate:signaling",
+			$foundation,
 			self::COMPONENT,
 			"udp",
 			(string) self::SERVER_REFLEXIVE_PRIORITY,

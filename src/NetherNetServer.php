@@ -62,7 +62,8 @@ final class NetherNetServer{
 				$configuration->gatheringTimeout,
 				$configuration->channelTimeout,
 				$configuration->maxRemoteCandidates,
-				$configuration->logger
+				$configuration->logger,
+				$configuration->advertisedAddresses
 			),
 			new SessionManager(
 				$listener,

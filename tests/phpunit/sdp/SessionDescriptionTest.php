@@ -99,6 +99,37 @@ final class SessionDescriptionTest extends TestCase{
 	}
 
 	/**
+	 * Replacing candidates must keep them where the peer expects them, in the media section ahead of
+	 * end-of-candidates, and leave every other line untouched.
+	 */
+	public function testWithCandidatesReplacesThemInPlace() : void{
+		$description = SessionDescription::parse(self::build(extraMedia: [
+			"a=candidate:1 1 udp 1 1.2.3.4 5000 typ host",
+			"a=candidate:2 1 udp 1 5.6.7.8 5001 typ host",
+			"a=end-of-candidates"
+		]));
+
+		$rewritten = $description->withCandidates(["9 1 udp 1 203.0.113.10 5000 typ srflx raddr 0.0.0.0 rport 0"]);
+
+		self::assertSame(1, $rewritten->countCandidates());
+		self::assertSame(
+			str_replace(
+				"a=candidate:1 1 udp 1 1.2.3.4 5000 typ host\r\na=candidate:2 1 udp 1 5.6.7.8 5001 typ host\r\n",
+				"a=candidate:9 1 udp 1 203.0.113.10 5000 typ srflx raddr 0.0.0.0 rport 0\r\n",
+				$description->toString()
+			),
+			$rewritten->toString()
+		);
+	}
+
+	public function testWithCandidatesOnDescriptionWithoutCandidatesAppendsThemToMediaSection() : void{
+		$rewritten = SessionDescription::parse(self::build())->withCandidates(["1 1 udp 1 1.2.3.4 5000 typ host"]);
+
+		self::assertSame(self::build(extraMedia: ["a=candidate:1 1 udp 1 1.2.3.4 5000 typ host"]), $rewritten->toString());
+		self::assertSame([], $rewritten->getSessionAttributeValues("candidate"));
+	}
+
+	/**
 	 * Adding then removing the assertion has to leave the description exactly as
 	 * it was. The peer's copy is what its signature covers, so any stray byte left
 	 * behind breaks verification later.

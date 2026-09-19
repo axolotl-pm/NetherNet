@@ -26,7 +26,9 @@ use pocketmine\nethernet\identity\IdentityVerifier;
 use pocketmine\nethernet\sdp\SdpException;
 use pocketmine\nethernet\sdp\SessionDescription;
 use pocketmine\nethernet\session\Reliability;
+use function filter_var;
 use function microtime;
+use const FILTER_VALIDATE_IP;
 
 final class WebRtcNegotiator implements Negotiator{
 
@@ -47,6 +49,11 @@ final class WebRtcNegotiator implements Negotiator{
 	private int $nextNegotiationId = 0;
 	private bool $closed = false;
 
+	/**
+	 * @param string[]|null $advertisedAddresses Addresses offered in bundled answers in place of gathered candidates, or
+	 *                                           null to offer every gathered candidate. See {@link IceCandidateFormatter::advertise()}.
+	 * @phpstan-param list<string>|null $advertisedAddresses
+	 */
 	public function __construct(
 		private readonly IdentityProvider $identityProvider,
 		private readonly IdentityVerifier $identityVerifier,
@@ -55,13 +62,19 @@ final class WebRtcNegotiator implements Negotiator{
 		private readonly float $gatheringTimeout,
 		private readonly float $channelTimeout,
 		private readonly int $maxRemoteCandidates,
-		private readonly ?\Logger $logger = null
+		private readonly ?\Logger $logger = null,
+		private readonly ?array $advertisedAddresses = null
 	){
 		if($gatheringTimeout <= 0.0 || $channelTimeout <= 0.0){
 			throw new \InvalidArgumentException("Timeouts must be positive");
 		}
 		if($maxRemoteCandidates < 1){
 			throw new \InvalidArgumentException("Maximum remote candidates must be positive, got $maxRemoteCandidates");
+		}
+		foreach($advertisedAddresses ?? [] as $address){
+			if(filter_var($address, FILTER_VALIDATE_IP) === false){
+				throw new \InvalidArgumentException("Advertised address \"$address\" is not an IP address");
+			}
 		}
 	}
 
@@ -306,8 +319,11 @@ final class WebRtcNegotiator implements Negotiator{
 			throw new SdpException("Local description has no ice-ufrag");
 		}
 
+		// Advertised addresses only rewrite bundled answers; trickle ICE is used for LAN discovery where local gathered addresses are required.
 		if($candidateMode === CandidateMode::TRICKLE){
 			$answer = $answer->withoutCandidates();
+		}elseif($this->advertisedAddresses !== null){
+			$answer = $answer->withCandidates(IceCandidateFormatter::advertise($answer->getMediaAttributeValues("candidate"), $this->advertisedAddresses));
 		}
 
 		$assertion = $this->identityProvider->issue($answer->getFingerprint());
