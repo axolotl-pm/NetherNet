@@ -18,7 +18,6 @@ use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\DataDecodeException;
-use pmmp\encoding\LE;
 use pmmp\encoding\VarInt;
 use function count;
 use function ctype_digit;
@@ -28,19 +27,22 @@ use function strtolower;
 use function trim;
 
 /**
- * Server LAN discovery advertisement payload (version 6).
+ * Server LAN discovery advertisement payload (version 7).
  */
 final class ServerData{
 
-	public const VERSION = 6;
+	public const VERSION = 7;
 
 	public const CONNECTION_TYPE_NETHERNET = 4;
 
 	/**
+	 * @param string $version Game version of the host, not the payload VERSION.
 	 * @param string $nonce Optional verification nonce echoed back in client Login ClientData.
 	 */
 	public function __construct(
 		public readonly string $serverName,
+		public readonly int $protocol,
+		public readonly string $version,
 		public readonly string $levelName,
 		public readonly GameType $gameType = GameType::SURVIVAL,
 		public readonly int $playerCount = 0,
@@ -50,14 +52,13 @@ final class ServerData{
 		public readonly bool $acceptsOnlineAuth = true,
 		public readonly bool $acceptsSelfSignedAuth = true,
 		public readonly string $nonce = "",
-		public readonly TransportLayer $transportLayer = TransportLayer::NETHERNET,
 		public readonly int $connectionType = self::CONNECTION_TYPE_NETHERNET
 	){}
 
 	/**
 	 * Parses a ServerData payload from a semicolon-separated RakNet pong string.
 	 */
-	public static function fromPongData(string $pong, ?TransportLayer $transportLayer = null) : ?self{
+	public static function fromPongData(string $pong) : ?self{
 		$fields = explode(";", $pong);
 		if(count($fields) < 9){
 			return null;
@@ -65,11 +66,12 @@ final class ServerData{
 
 		return new self(
 			serverName: $fields[1],
+			protocol: self::parseCount($fields[2]),
+			version: $fields[3],
 			levelName: $fields[7],
 			gameType: self::parseGameType($fields[8]) ?? GameType::SURVIVAL,
 			playerCount: self::parseCount($fields[4]),
-			maxPlayerCount: self::parseCount($fields[5]),
-			transportLayer: $transportLayer ?? TransportLayer::NETHERNET
+			maxPlayerCount: self::parseCount($fields[5])
 		);
 	}
 
@@ -101,7 +103,11 @@ final class ServerData{
 			}
 
 			$serverName = self::readString($in);
+			$protocol = VarInt::readSignedInt($in);
+			$gameVersion = self::readString($in);
 			$levelName = self::readString($in);
+			$playerCount = VarInt::readSignedInt($in);
+			$maxPlayerCount = VarInt::readSignedInt($in);
 
 			$rawGameType = VarInt::readSignedInt($in);
 			$gameType = GameType::tryFrom($rawGameType);
@@ -109,20 +115,11 @@ final class ServerData{
 				throw new DiscoveryException("Unknown game type $rawGameType");
 			}
 
-			$playerCount = LE::readSignedInt($in);
-			$maxPlayerCount = LE::readSignedInt($in);
 			$editorWorld = Byte::readUnsigned($in) !== 0;
 			$hardcore = Byte::readUnsigned($in) !== 0;
 			$acceptsOnlineAuth = Byte::readUnsigned($in) !== 0;
 			$acceptsSelfSignedAuth = Byte::readUnsigned($in) !== 0;
 			$nonce = self::readString($in);
-
-			$rawTransport = VarInt::readSignedInt($in);
-			$transportLayer = TransportLayer::tryFrom($rawTransport);
-			if($transportLayer === null){
-				throw new DiscoveryException("Unknown transport layer $rawTransport");
-			}
-
 			$connectionType = VarInt::readSignedInt($in);
 
 			if($in->getUnreadLength() !== 0){
@@ -134,6 +131,8 @@ final class ServerData{
 
 		return new self(
 			$serverName,
+			$protocol,
+			$gameVersion,
 			$levelName,
 			$gameType,
 			$playerCount,
@@ -143,7 +142,6 @@ final class ServerData{
 			$acceptsOnlineAuth,
 			$acceptsSelfSignedAuth,
 			$nonce,
-			$transportLayer,
 			$connectionType
 		);
 	}
@@ -153,16 +151,17 @@ final class ServerData{
 
 		Byte::writeUnsigned($out, self::VERSION);
 		self::writeString($out, $this->serverName);
+		VarInt::writeSignedInt($out, $this->protocol);
+		self::writeString($out, $this->version);
 		self::writeString($out, $this->levelName);
+		VarInt::writeSignedInt($out, $this->playerCount);
+		VarInt::writeSignedInt($out, $this->maxPlayerCount);
 		VarInt::writeSignedInt($out, $this->gameType->value);
-		LE::writeSignedInt($out, $this->playerCount);
-		LE::writeSignedInt($out, $this->maxPlayerCount);
 		Byte::writeUnsigned($out, $this->editorWorld ? 1 : 0);
 		Byte::writeUnsigned($out, $this->hardcore ? 1 : 0);
 		Byte::writeUnsigned($out, $this->acceptsOnlineAuth ? 1 : 0);
 		Byte::writeUnsigned($out, $this->acceptsSelfSignedAuth ? 1 : 0);
 		self::writeString($out, $this->nonce);
-		VarInt::writeSignedInt($out, $this->transportLayer->value);
 		VarInt::writeSignedInt($out, $this->connectionType);
 
 		return $out->getData();

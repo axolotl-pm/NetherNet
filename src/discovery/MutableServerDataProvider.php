@@ -26,8 +26,8 @@ final class MutableServerDataProvider implements ServerDataProvider{
 		$this->data = $data;
 	}
 
-	public function setPongData(string $pong, ?TransportLayer $transportLayer = null) : void{
-		$data = ServerData::fromPongData($pong, $transportLayer);
+	public function setPongData(string $pong) : void{
+		$data = ServerData::fromPongData($pong);
 		if($data !== null){
 			$this->data = $data;
 		}

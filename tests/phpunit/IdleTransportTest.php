@@ -89,7 +89,7 @@ final class IdleTransportTest extends TestCase{
 		$logger = new RecordingLogger();
 		$signaling = $this->startOnAFreePort(fn(int $port) => new LanSignaling(
 			new FakeNegotiator("answer-sdp"),
-			new FixedServerDataProvider(new ServerData(serverName: "host", levelName: "world")),
+			new FixedServerDataProvider(new ServerData(serverName: "host", protocol: 2181, version: "1.26.50", levelName: "world")),
 			4242,
 			"127.0.0.1",
 			$port,

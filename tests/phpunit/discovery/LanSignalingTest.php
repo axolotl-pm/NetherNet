@@ -89,7 +89,7 @@ final class LanSignalingTest extends TestCase{
 			$port = random_int(20000, 60000);
 			$signaling = new LanSignaling(
 				$negotiator,
-				new FixedServerDataProvider(new ServerData(serverName: "test host", levelName: "test world", playerCount: 3, maxPlayerCount: 10)),
+				new FixedServerDataProvider(new ServerData(serverName: "test host", protocol: 2181, version: "1.26.50", levelName: "test world", playerCount: 3, maxPlayerCount: 10)),
 				self::HOST_NETWORK_ID,
 				"127.0.0.1",
 				$port
@@ -116,7 +116,7 @@ final class LanSignalingTest extends TestCase{
 			$server = new NetherNetServer($negotiator, new SessionManager(new NullEventListener(), new ConnectionBudgetConfiguration()));
 			$signaling = new LanSignaling(
 				$negotiator,
-				new FixedServerDataProvider(new ServerData(serverName: "test host", levelName: "test world")),
+				new FixedServerDataProvider(new ServerData(serverName: "test host", protocol: 2181, version: "1.26.50", levelName: "test world")),
 				self::HOST_NETWORK_ID,
 				"127.0.0.1",
 				$port
