@@ -111,7 +111,7 @@ final class HttpSignaling implements SignalingInterface{
 	private AddressBlockTracker $blockTracker;
 
 	private int $nextConnectionId = 0;
-	private bool $closed = false;
+	private bool $shutDown = false;
 
 	/**
 	 * @param array<string, mixed>|null $tlsContext SSL context options for HTTPS support (TLS trust anchor).
@@ -198,21 +198,21 @@ final class HttpSignaling implements SignalingInterface{
 	/**
 	 * Exports the accepted socket descriptor into a non-blocking stream for TLS and HTTP I/O.
 	 */
-	private function adopt(\Socket $connection, ?InternetAddress $peerAddress, float $now) : ?HttpConnection{
-		socket_set_nonblock($connection);
+	private function createConnection(\Socket $socket, ?InternetAddress $peerAddress, float $now) : ?HttpConnection{
+		socket_set_nonblock($socket);
 
-		$stream = socket_export_stream($connection);
+		$stream = socket_export_stream($socket);
 		if($stream === false){
 			$this->logger?->debug("Could not read the accepted socket as a stream; dropping " . ($peerAddress?->toString() ?? "unknown"));
-			socket_close($connection);
+			socket_close($socket);
 
 			return null;
 		}
 		stream_set_blocking($stream, false);
 
-		$connectionState = new HttpConnection(
+		$httpConnection = new HttpConnection(
 			$stream,
-			$connection,
+			$socket,
 			$peerAddress,
 			$now + self::HEAD_TIMEOUT,
 			$now + self::BODY_TIMEOUT
@@ -222,18 +222,18 @@ final class HttpSignaling implements SignalingInterface{
 			foreach($this->tlsContext as $option => $value){
 				stream_context_set_option($stream, "ssl", $option, $value);
 			}
-			$connectionState->state = HttpConnectionState::HANDSHAKE;
+			$httpConnection->state = HttpConnectionState::HANDSHAKE;
 		}
 
-		return $connectionState;
+		return $httpConnection;
 	}
 
 	/**
-	 * Accepts incoming connections and advances pending requests and responses.
+	 * Accepts incoming connections and processes pending requests and responses.
 	 */
 	public function tick() : void{
 		$socket = $this->socket;
-		if($this->closed || $socket === null){
+		if($this->shutDown || $socket === null){
 			return;
 		}
 
@@ -257,7 +257,7 @@ final class HttpSignaling implements SignalingInterface{
 				continue;
 			}
 
-			$connection = $this->adopt($accepted, $peerAddress, $now);
+			$connection = $this->createConnection($accepted, $peerAddress, $now);
 			if($connection === null){
 				continue;
 			}
@@ -274,7 +274,7 @@ final class HttpSignaling implements SignalingInterface{
 
 		foreach($this->connections as $id => $connection){
 			try{
-				$this->advance($connection, $now);
+				$this->processConnection($connection, $now);
 			}catch(HttpException $e){
 				$this->logger?->debug($connection->peerName() . ": " . $e->getMessage());
 				$this->respond($connection, $e->getStatusCode(), "");
@@ -291,10 +291,10 @@ final class HttpSignaling implements SignalingInterface{
 	}
 
 	public function shutdown() : void{
-		if($this->closed){
+		if($this->shutDown){
 			return;
 		}
-		$this->closed = true;
+		$this->shutDown = true;
 
 		foreach($this->connections as $connection){
 			$this->disconnect($connection);
@@ -310,7 +310,7 @@ final class HttpSignaling implements SignalingInterface{
 	/**
 	 * @throws HttpException
 	 */
-	private function advance(HttpConnection $connection, float $now) : void{
+	private function processConnection(HttpConnection $connection, float $now) : void{
 		switch($connection->state){
 			case HttpConnectionState::HANDSHAKE:
 				if(!$connection->handshakeStarted){
@@ -325,7 +325,7 @@ final class HttpSignaling implements SignalingInterface{
 					}
 					// Handshake record begins with 0x16; redirect plain HTTP attempts
 					if($opening !== "\x16"){
-						$connection->redirectToTls = true;
+						$connection->needsTlsRedirect = true;
 						$connection->state = HttpConnectionState::READING_HEAD;
 
 						return;
@@ -358,8 +358,8 @@ final class HttpSignaling implements SignalingInterface{
 					throw new HttpException(408, "Timed out reading the request head after " . strlen($connection->input) . " bytes: " . self::describeBytes($connection->input));
 				}
 
-				$head = self::findHeadEnd($connection->input);
-				if($head === null){
+				$headEnd = self::findHeadEnd($connection->input);
+				if($headEnd === null){
 					if(strlen($connection->input) > self::MAX_HEAD_SIZE){
 						throw new HttpException(431, "Request head is too large");
 					}
@@ -368,7 +368,7 @@ final class HttpSignaling implements SignalingInterface{
 					return;
 				}
 
-				[$end, $terminatorLength] = $head;
+				[$end, $terminatorLength] = $headEnd;
 				if($end > self::MAX_HEAD_SIZE){
 					throw new HttpException(431, "Request head is too large");
 				}
@@ -376,7 +376,7 @@ final class HttpSignaling implements SignalingInterface{
 				$connection->request = HttpRequest::parse(substr($connection->input, 0, $end));
 				$connection->bodyOffset = $end + $terminatorLength;
 
-				if($connection->redirectToTls){
+				if($connection->needsTlsRedirect){
 					$this->redirectToTls($connection, $connection->request);
 
 					return;
@@ -692,7 +692,7 @@ final class HttpSignaling implements SignalingInterface{
 	}
 
 	/**
-	 * Evicts the least advanced pending connection when at capacity.
+	 * Evicts the least recently active connection.
 	 *
 	 * @return bool false if all connections are already in progress.
 	 */

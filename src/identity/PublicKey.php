@@ -34,7 +34,7 @@ use function strlen;
 
 final class PublicKey{
 
-	private const CURVE_NAME = "P-384";
+	private const JWK_CURVE_NAME = "P-384";
 	private const COORDINATE_SIZE = 48;
 
 	/**
@@ -82,8 +82,8 @@ final class PublicKey{
 		if(($jwk["kty"] ?? null) !== "EC"){
 			throw new CryptoException("Public key JWK must have kty EC");
 		}
-		if(($jwk["crv"] ?? null) !== self::CURVE_NAME){
-			throw new CryptoException("Public key JWK must use curve " . self::CURVE_NAME);
+		if(($jwk["crv"] ?? null) !== self::JWK_CURVE_NAME){
+			throw new CryptoException("Public key JWK must use curve " . self::JWK_CURVE_NAME);
 		}
 
 		$x = $jwk["x"] ?? null;

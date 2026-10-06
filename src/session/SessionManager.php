@@ -69,7 +69,7 @@ final class SessionManager{
 			$this->listener->onSessionOpen($session);
 		}catch(\Throwable $e){
 			$session->close(DisconnectReason::REJECTED_BY_HOST);
-			$this->forget($session);
+			$this->removeSession($session);
 
 			throw $e;
 		}
@@ -81,31 +81,31 @@ final class SessionManager{
 	 * @phpstan-param array<string, DataChannel> $channels
 	 */
 	private static function segmenterFor(array $channels, Segmenter $configured) : Segmenter{
-		$negotiated = null;
+		$smallestMaxMessageSize = null;
 		foreach($channels as $channel){
 			$size = $channel->getMaxMessageSize();
-			if($negotiated === null || $size < $negotiated){
-				$negotiated = $size;
+			if($smallestMaxMessageSize === null || $size < $smallestMaxMessageSize){
+				$smallestMaxMessageSize = $size;
 			}
 		}
 
-		$payload = $negotiated === null ? 0 : $negotiated - 1;
+		$segmentPayloadSize = $smallestMaxMessageSize === null ? 0 : $smallestMaxMessageSize - 1;
 
-		return $payload >= 1 && $payload < $configured->getMaxSegmentPayloadSize() ? new Segmenter($payload) : $configured;
+		return $segmentPayloadSize >= 1 && $segmentPayloadSize < $configured->getMaxSegmentPayloadSize() ? new Segmenter($segmentPayloadSize) : $configured;
 	}
 
 	public function tick() : void{
 		foreach($this->sessions as $session){
 			if(!$session->checkLiveness()){
-				$this->forget($session);
+				$this->removeSession($session);
 				continue;
 			}
 
-			$this->drain($session);
+			$this->processIncoming($session);
 		}
 	}
 
-	private function drain(Session $session) : void{
+	private function processIncoming(Session $session) : void{
 		for($i = 0; $i < self::MAX_MESSAGES_PER_TICK; ++$i){
 			if(!$this->listener->canAcceptPackets()){
 				return;
@@ -115,7 +115,7 @@ final class SessionManager{
 				$message = $session->receive();
 			}catch(SessionException $e){
 				$this->logger?->debug("Session " . $session->getId() . " failed while reading: " . $e->getMessage());
-				$this->forget($session);
+				$this->removeSession($session);
 
 				return;
 			}
@@ -127,7 +127,7 @@ final class SessionManager{
 			$this->listener->onPacketReceive($session, $message->payload, $message->reliability);
 
 			if($session->isClosed()){
-				$this->forget($session);
+				$this->removeSession($session);
 
 				return;
 			}
@@ -141,7 +141,7 @@ final class SessionManager{
 		$session->initiateDisconnect($reason);
 	}
 
-	private function forget(Session $session) : void{
+	private function removeSession(Session $session) : void{
 		if(!isset($this->sessions[$session->getId()])){
 			return;
 		}
@@ -174,7 +174,7 @@ final class SessionManager{
 	public function shutdown(DisconnectReason $reason = DisconnectReason::SERVER_SHUTDOWN) : void{
 		foreach($this->sessions as $session){
 			$session->close($reason);
-			$this->forget($session);
+			$this->removeSession($session);
 		}
 	}
 }

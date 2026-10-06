@@ -14,7 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet;
 
-use pmmp\webrtc\WebRtcException;
 use pocketmine\nethernet\negotiation\Negotiator;
 use pocketmine\nethernet\negotiation\WebRtcNegotiator;
 use pocketmine\nethernet\session\DisconnectReason;
@@ -94,14 +93,14 @@ final class NetherNetServer{
 		}
 		$this->started = true;
 
-		$started = [];
+		$startedTransports = [];
 		try{
 			foreach($this->signaling as $signaling){
 				$signaling->start();
-				$started[] = $signaling;
+				$startedTransports[] = $signaling;
 			}
 		}catch(SignalingException $e){
-			foreach($started as $alreadyStarted){
+			foreach($startedTransports as $alreadyStarted){
 				$alreadyStarted->shutdown();
 			}
 
@@ -132,10 +131,7 @@ final class NetherNetServer{
 			$address = $remoteAddress === null ? null : InternetAddress::parse($remoteAddress)?->ip;
 			if($address !== null && $this->blockTracker->isBlocked($address)){
 				$this->logger?->debug("Closed connection from blocked address: $address");
-				try{
-					$peer->peerConnection->close();
-				}catch(WebRtcException){
-				}
+				WebRtcResources::closeQuietly($peer->peerConnection);
 				continue;
 			}
 

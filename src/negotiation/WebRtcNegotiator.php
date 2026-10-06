@@ -26,6 +26,7 @@ use pocketmine\nethernet\identity\IdentityVerifier;
 use pocketmine\nethernet\sdp\SdpException;
 use pocketmine\nethernet\sdp\SessionDescription;
 use pocketmine\nethernet\session\Reliability;
+use pocketmine\nethernet\WebRtcResources;
 use function filter_var;
 use function microtime;
 use const FILTER_VALIDATE_IP;
@@ -47,7 +48,7 @@ final class WebRtcNegotiator implements Negotiator{
 	private array $established = [];
 
 	private int $nextNegotiationId = 0;
-	private bool $closed = false;
+	private bool $shutDown = false;
 
 	/**
 	 * @param string[]|null $advertisedAddresses Addresses offered in bundled answers in place of gathered candidates, or
@@ -79,7 +80,7 @@ final class WebRtcNegotiator implements Negotiator{
 	}
 
 	public function beginNegotiation(string $offerSdp, string $networkId, CandidateMode $candidateMode = CandidateMode::BUNDLED, ?string $peerAddress = null) : Negotiation{
-		if($this->closed){
+		if($this->shutDown){
 			throw new NegotiationException("Negotiator is shut down", ErrorCode::NO_SIGNALING_CHANNEL);
 		}
 
@@ -111,7 +112,7 @@ final class WebRtcNegotiator implements Negotiator{
 		try{
 			$peerConnection->setRemoteOffer($offer->withoutIdentity()->toString());
 		}catch(WebRtcException $e){
-			$this->discard($peerConnection);
+			WebRtcResources::closeQuietly($peerConnection);
 
 			throw new NegotiationException("WebRTC peer connection failure: " . $e->getMessage(), ErrorCode::FAILED_TO_SET_REMOTE_DESCRIPTION, $e);
 		}
@@ -147,14 +148,14 @@ final class WebRtcNegotiator implements Negotiator{
 	}
 
 	public function tick() : void{
-		if($this->closed){
+		if($this->shutDown){
 			return;
 		}
 
 		$now = microtime(true);
 		foreach($this->negotiations as $id => $negotiation){
 			try{
-				$this->advance($negotiation, $now);
+				$this->processNegotiation($negotiation, $now);
 			}catch(WebRtcException $e){
 				$negotiation->fail("WebRTC peer connection failure: " . $e->getMessage(), ErrorCode::FAILED_TO_CREATE_PEER_CONNECTION);
 			}
@@ -176,10 +177,10 @@ final class WebRtcNegotiator implements Negotiator{
 	}
 
 	public function shutdown() : void{
-		if($this->closed){
+		if($this->shutDown){
 			return;
 		}
-		$this->closed = true;
+		$this->shutDown = true;
 
 		foreach($this->negotiations as $negotiation){
 			$negotiation->fail("Negotiator is shutting down", ErrorCode::NO_SIGNALING_CHANNEL);
@@ -187,7 +188,7 @@ final class WebRtcNegotiator implements Negotiator{
 		$this->negotiations = [];
 
 		foreach($this->established as $peer){
-			$this->discard($peer->peerConnection);
+			WebRtcResources::closeQuietly($peer->peerConnection);
 		}
 		$this->established = [];
 	}
@@ -195,7 +196,7 @@ final class WebRtcNegotiator implements Negotiator{
 	/**
 	 * @throws WebRtcException
 	 */
-	private function advance(WebRtcNegotiation $negotiation, float $now) : void{
+	private function processNegotiation(WebRtcNegotiation $negotiation, float $now) : void{
 		$state = $negotiation->getPeerConnection()->getState();
 		$broken = match($state){
 			ConnectionState::FAILED, ConnectionState::CLOSED => true,
@@ -208,8 +209,8 @@ final class WebRtcNegotiator implements Negotiator{
 		}
 
 		match($negotiation->getState()){
-			NegotiationState::GATHERING => $this->advanceGathering($negotiation, $now),
-			NegotiationState::ANSWERED => $this->advanceAnswered($negotiation, $now),
+			NegotiationState::GATHERING => $this->processGathering($negotiation, $now),
+			NegotiationState::ANSWERED => $this->processAnswered($negotiation, $now),
 			default => null
 		};
 	}
@@ -217,7 +218,7 @@ final class WebRtcNegotiator implements Negotiator{
 	/**
 	 * @throws WebRtcException
 	 */
-	private function advanceGathering(WebRtcNegotiation $negotiation, float $now) : void{
+	private function processGathering(WebRtcNegotiation $negotiation, float $now) : void{
 		$peerConnection = $negotiation->getPeerConnection();
 
 		if($negotiation->getCandidateMode() === CandidateMode::BUNDLED){
@@ -251,7 +252,7 @@ final class WebRtcNegotiator implements Negotiator{
 	/**
 	 * @throws WebRtcException
 	 */
-	private function advanceAnswered(WebRtcNegotiation $negotiation, float $now) : void{
+	private function processAnswered(WebRtcNegotiation $negotiation, float $now) : void{
 		$this->collectChannels($negotiation);
 		if($negotiation->isFailed()){
 			return;
@@ -334,13 +335,6 @@ final class WebRtcNegotiator implements Negotiator{
 	private function checkDeadline(WebRtcNegotiation $negotiation, float $now, string $reason, ErrorCode $code) : void{
 		if($now >= $negotiation->getDeadline()){
 			$negotiation->fail($reason, $code);
-		}
-	}
-
-	private function discard(PeerConnection $peerConnection) : void{
-		try{
-			$peerConnection->close();
-		}catch(WebRtcException){
 		}
 	}
 }

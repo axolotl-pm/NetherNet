@@ -31,6 +31,7 @@ final class EcdsaSignature{
 	private const ASN1_INTEGER_TAG = "\x02";
 	private const ASN1_SEQUENCE_TAG = "\x30";
 	private const ASN1_LONG_FORM_FLAG = 0x80;
+	private const ASN1_INTEGER_SIGN_BIT = 0x80;
 
 	private function __construct(){}
 
@@ -122,7 +123,7 @@ final class EcdsaSignature{
 		$value = ltrim($value, "\x00");
 		if($value === ""){
 			$value = "\x00";
-		}elseif(ord($value[0]) >= self::ASN1_LONG_FORM_FLAG){
+		}elseif((ord($value[0]) & self::ASN1_INTEGER_SIGN_BIT) !== 0){
 			// DER integers are signed; prepend zero byte if high bit is set to preserve positive value
 			$value = "\x00" . $value;
 		}

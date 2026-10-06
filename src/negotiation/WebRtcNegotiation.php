@@ -20,6 +20,7 @@ use pmmp\webrtc\PeerConnection;
 use pmmp\webrtc\WebRtcException;
 use pocketmine\nethernet\identity\PeerIdentity;
 use pocketmine\nethernet\session\Reliability;
+use pocketmine\nethernet\WebRtcResources;
 
 final class WebRtcNegotiation implements Negotiation{
 
@@ -115,10 +116,7 @@ final class WebRtcNegotiation implements Negotiation{
 		$this->failureReason = $reason;
 		$this->failureCode = $code;
 
-		try{
-			$this->peerConnection->close();
-		}catch(WebRtcException){
-		}
+		WebRtcResources::closeQuietly($this->peerConnection);
 	}
 
 	public function getState() : NegotiationState{ return $this->state; }

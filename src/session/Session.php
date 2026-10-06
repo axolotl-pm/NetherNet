@@ -24,6 +24,7 @@ use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\session\framing\Assembler;
 use pocketmine\nethernet\session\framing\FramingException;
 use pocketmine\nethernet\session\framing\Segmenter;
+use pocketmine\nethernet\WebRtcResources;
 use function count;
 use function microtime;
 
@@ -284,15 +285,9 @@ final class Session{
 		$this->disconnectReason = $reason;
 
 		foreach($this->channels as $channel){
-			try{
-				$channel->close();
-			}catch(WebRtcException){
-			}
+			WebRtcResources::closeQuietly($channel);
 		}
-		try{
-			$this->peerConnection->close();
-		}catch(WebRtcException){
-		}
+		WebRtcResources::closeQuietly($this->peerConnection);
 	}
 
 	/**

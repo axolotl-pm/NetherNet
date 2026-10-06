@@ -61,7 +61,7 @@ final class LanSignaling implements SignalingInterface{
 	 */
 	public const MAX_DATAGRAMS_PER_TICK = 256;
 
-	public const DEFAULT_MAX_PENDING = 64;
+	public const DEFAULT_MAX_CONNECTIONS = 64;
 
 	private const MAX_DATAGRAM_SIZE = 65535;
 
@@ -73,11 +73,11 @@ final class LanSignaling implements SignalingInterface{
 	 * @var PendingConnection[]
 	 * @phpstan-var array<string, PendingConnection>
 	 */
-	private array $pending = [];
+	private array $connections = [];
 
 	private AddressBlockTracker $blockTracker;
 
-	private bool $closed = false;
+	private bool $shutDown = false;
 
 	/**
 	 * @param int $networkId 64-bit unsigned integer identifying this host on the network.
@@ -88,13 +88,13 @@ final class LanSignaling implements SignalingInterface{
 		private readonly int $networkId,
 		private readonly InternetAddress $bindAddress = new InternetAddress("0.0.0.0", self::DEFAULT_PORT, 4),
 		private readonly ?\Logger $logger = null,
-		private readonly int $maxPending = self::DEFAULT_MAX_PENDING
+		private readonly int $maxConnections = self::DEFAULT_MAX_CONNECTIONS
 	){
 		if($networkId <= 0){
 			throw new \InvalidArgumentException("Network id must be positive, got $networkId");
 		}
-		if($maxPending < 1){
-			throw new \InvalidArgumentException("Maximum pending connections must be positive, got $maxPending");
+		if($maxConnections < 1){
+			throw new \InvalidArgumentException("Maximum connections must be positive, got $maxConnections");
 		}
 
 		$this->blockTracker = new AddressBlockTracker();
@@ -138,24 +138,24 @@ final class LanSignaling implements SignalingInterface{
 
 	public function tick() : void{
 		$socket = $this->socket;
-		if($this->closed || $socket === null){
+		if($this->shutDown || $socket === null){
 			return;
 		}
 
 		$this->receiveAll($socket);
-		$this->advancePending();
+		$this->processConnections();
 	}
 
 	public function shutdown() : void{
-		if($this->closed){
+		if($this->shutDown){
 			return;
 		}
-		$this->closed = true;
+		$this->shutDown = true;
 
-		foreach($this->pending as $pending){
-			$pending->negotiation->fail("LAN discovery is shutting down", ErrorCode::NO_SIGNALING_CHANNEL);
+		foreach($this->connections as $connection){
+			$connection->negotiation->fail("LAN discovery is shutting down", ErrorCode::NO_SIGNALING_CHANNEL);
 		}
-		$this->pending = [];
+		$this->connections = [];
 
 		if($this->socket !== null){
 			socket_close($this->socket);
@@ -241,11 +241,11 @@ final class LanSignaling implements SignalingInterface{
 	}
 
 	private function handleOffer(Signal $signal, int $senderId, string $key, InternetAddress $address) : void{
-		if(isset($this->pending[$key])){
+		if(isset($this->connections[$key])){
 			return;
 		}
-		if(count($this->pending) >= $this->maxPending){
-			$this->logger?->debug("Refused offer from $senderId: maximum pending connections limit reached ($this->maxPending)");
+		if(count($this->connections) >= $this->maxConnections){
+			$this->logger?->debug("Refused offer from $senderId: connection limit of $this->maxConnections reached");
 			$this->sendSignal($senderId, new Signal(SignalType::CONNECT_ERROR, $signal->connectionId, (string) ErrorCode::GENERIC_FAILURE->value), $address);
 
 			return;
@@ -264,55 +264,55 @@ final class LanSignaling implements SignalingInterface{
 			return;
 		}
 
-		$this->pending[$key] = new PendingConnection($negotiation, $senderId, $address, $signal->connectionId);
+		$this->connections[$key] = new PendingConnection($negotiation, $senderId, $address, $signal->connectionId);
 	}
 
 	private function handleCandidate(Signal $signal, string $key) : void{
-		$pending = $this->pending[$key] ?? null;
-		if($pending === null){
+		$connection = $this->connections[$key] ?? null;
+		if($connection === null){
 			return;
 		}
 
 		try{
-			$pending->negotiation->addRemoteCandidate($signal->data);
+			$connection->negotiation->addRemoteCandidate($signal->data);
 		}catch(NegotiationException $e){
 			$this->logger?->debug("Peer sent an unusable ICE candidate: " . $e->getMessage());
 		}
 	}
 
 	private function handlePeerError(Signal $signal, string $key) : void{
-		$pending = $this->pending[$key] ?? null;
-		$pending?->negotiation->fail("Peer reported error code " . $signal->data, ErrorCode::GENERIC_FAILURE);
+		$connection = $this->connections[$key] ?? null;
+		$connection?->negotiation->fail("Peer reported error code " . $signal->data, ErrorCode::GENERIC_FAILURE);
 	}
 
-	private function advancePending() : void{
-		foreach($this->pending as $key => $pending){
-			$negotiation = $pending->negotiation;
+	private function processConnections() : void{
+		foreach($this->connections as $key => $connection){
+			$negotiation = $connection->negotiation;
 
 			if($negotiation->isFailed()){
-				$this->sendSignal($pending->peerId, new Signal(
+				$this->sendSignal($connection->peerId, new Signal(
 					SignalType::CONNECT_ERROR,
-					$pending->connectionId,
+					$connection->connectionId,
 					(string) $negotiation->getFailureCode()->value
-				), $pending->address);
-				unset($this->pending[$key]);
+				), $connection->address);
+				unset($this->connections[$key]);
 				continue;
 			}
 
 			$answer = $negotiation->getAnswer();
-			if($answer !== null && !$pending->answerSent){
-				$this->sendSignal($pending->peerId, new Signal(SignalType::CONNECT_RESPONSE, $pending->connectionId, $answer), $pending->address);
-				$pending->answerSent = true;
+			if($answer !== null && !$connection->answerSent){
+				$this->sendSignal($connection->peerId, new Signal(SignalType::CONNECT_RESPONSE, $connection->connectionId, $answer), $connection->address);
+				$connection->answerSent = true;
 			}
 
-			if($pending->answerSent){
+			if($connection->answerSent){
 				foreach($negotiation->takeLocalCandidates() as $candidate){
-					$this->sendSignal($pending->peerId, new Signal(SignalType::CANDIDATE_ADD, $pending->connectionId, $candidate), $pending->address);
+					$this->sendSignal($connection->peerId, new Signal(SignalType::CANDIDATE_ADD, $connection->connectionId, $candidate), $connection->address);
 				}
 			}
 
 			if($negotiation->isFinished()){
-				unset($this->pending[$key]);
+				unset($this->connections[$key]);
 			}
 		}
 	}

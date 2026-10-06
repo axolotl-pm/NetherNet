@@ -28,7 +28,7 @@ use function openssl_pkey_new;
 
 final class ServerIdentity{
 
-	public const CURVE_NAME = "secp384r1";
+	public const OPENSSL_CURVE_NAME = "secp384r1";
 
 	/** Coordinate width for P-384 */
 	private const COORDINATE_SIZE = 48;
@@ -48,7 +48,7 @@ final class ServerIdentity{
 	 * @throws CryptoException
 	 */
 	public static function generate() : self{
-		$key = openssl_pkey_new(["ec" => ["curve_name" => self::CURVE_NAME]]);
+		$key = openssl_pkey_new(["ec" => ["curve_name" => self::OPENSSL_CURVE_NAME]]);
 		if($key === false){
 			throw new CryptoException("OpenSSL could not generate a key: " . OpenSsl::lastError());
 		}

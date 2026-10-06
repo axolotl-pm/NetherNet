@@ -37,14 +37,14 @@ final class IdentityAssertion{
 		private readonly string $domain,
 		private readonly string $protocol,
 		private readonly string $token,
-		private readonly string $fingerprints
+		private readonly string $fingerprintSignature
 	){}
 
 	/**
 	 * @throws CryptoException
 	 */
-	public static function create(string $domain, string $token, string $fingerprints, string $protocol = self::PROTOCOL_DEFAULT) : self{
-		$assertion = new self($domain, $protocol, $token, $fingerprints);
+	public static function create(string $domain, string $token, string $fingerprintSignature, string $protocol = self::PROTOCOL_DEFAULT) : self{
+		$assertion = new self($domain, $protocol, $token, $fingerprintSignature);
 		$assertion->validate();
 
 		return $assertion;
@@ -80,12 +80,12 @@ final class IdentityAssertion{
 		$assertion = self::decodeJsonObject($inner, "identity assertion");
 
 		$token = $assertion["token"] ?? null;
-		$fingerprints = $assertion["fingerprints"] ?? null;
-		if(!is_string($token) || !is_string($fingerprints)){
+		$fingerprintSignature = $assertion["fingerprints"] ?? null;
+		if(!is_string($token) || !is_string($fingerprintSignature)){
 			throw new CryptoException("Identity assertion is missing its token or fingerprints");
 		}
 
-		$result = new self($domain, $protocol, $token, $fingerprints);
+		$result = new self($domain, $protocol, $token, $fingerprintSignature);
 		$result->validate();
 
 		return $result;
@@ -122,7 +122,7 @@ final class IdentityAssertion{
 		if($this->token === "" || substr_count($this->token, ".") !== 2){
 			throw new CryptoException("Identity token is not valid JWS");
 		}
-		if($this->fingerprints === "" || substr_count($this->fingerprints, ".") !== 2){
+		if($this->fingerprintSignature === "" || substr_count($this->fingerprintSignature, ".") !== 2){
 			throw new CryptoException("Fingerprint assertion is not valid JWS");
 		}
 	}
@@ -132,7 +132,7 @@ final class IdentityAssertion{
 	public function getProtocol() : string{ return $this->protocol; }
 
 	/** Returns the detached JWS (compact serialization) covering the SDP canonical fingerprint JSON. */
-	public function getFingerprints() : string{ return $this->fingerprints; }
+	public function getFingerprints() : string{ return $this->fingerprintSignature; }
 
 	public function getRawToken() : string{ return $this->token; }
 
@@ -151,7 +151,7 @@ final class IdentityAssertion{
 	public function encode() : string{
 		try{
 			$inner = json_encode([
-				"fingerprints" => $this->fingerprints,
+				"fingerprints" => $this->fingerprintSignature,
 				"token" => $this->token
 			], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
 
@@ -176,7 +176,7 @@ final class IdentityAssertion{
 	 */
 	public function verifyFingerprint(Fingerprint $fingerprint) : PublicKey{
 		$publicKey = $this->getToken()->getPublicKey();
-		if(!JsonWebSignature::verifyDetached($this->fingerprints, $fingerprint->toCanonicalPayload(), $publicKey)){
+		if(!JsonWebSignature::verifyDetached($this->fingerprintSignature, $fingerprint->toCanonicalPayload(), $publicKey)){
 			throw new CryptoException("Fingerprint assertion was not signed by the key in the token");
 		}
 
