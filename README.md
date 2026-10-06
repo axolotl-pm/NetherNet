@@ -8,7 +8,7 @@ A PHP implementation of **NetherNet**, the WebRTC DataChannel transport used by 
 
 ## Requirements
 
-- PHP 8.1 or newer (64-bit)
+- PHP 8.1 or newer (64-bit) with IPv6 support
 - `ext-webrtc`
 - `ext-openssl`, `ext-json`, `ext-sockets`
 

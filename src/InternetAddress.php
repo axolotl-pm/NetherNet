@@ -16,6 +16,8 @@ namespace pocketmine\nethernet;
 
 use function ctype_digit;
 use function filter_var;
+use function inet_ntop;
+use function inet_pton;
 use function str_ends_with;
 use function str_starts_with;
 use function strrpos;
@@ -39,6 +41,21 @@ final class InternetAddress{
 		if($version !== 4 && $version !== 6){
 			throw new \InvalidArgumentException("IP version must be 4 or 6, got $version");
 		}
+	}
+
+	/**
+	 * Returns the canonical text form of an IP address, unbracketed, or null if it is not an IP address.
+	 */
+	public static function normalizeIp(string $ip) : ?string{
+		if(str_starts_with($ip, "[") && str_ends_with($ip, "]")){
+			$ip = substr($ip, 1, -1);
+		}
+		$packed = @inet_pton($ip);
+		if($packed === false){
+			return null;
+		}
+		$normalized = inet_ntop($packed);
+		return $normalized === false ? null : $normalized;
 	}
 
 	/**

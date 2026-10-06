@@ -14,15 +14,22 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\negotiation;
 
+use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\sdp\SessionDescription;
+use function array_map;
 use function array_merge;
+use function array_unique;
+use function array_values;
 use function count;
 use function explode;
+use function filter_var;
 use function implode;
 use function in_array;
 use function str_starts_with;
 use function strtolower;
 use function substr;
+use const FILTER_FLAG_IPV6;
+use const FILTER_VALIDATE_IP;
 
 /**
  * Formats ICE candidate strings to match NetherNet and Minecraft WebRTC attribute expectations.
@@ -78,6 +85,7 @@ final class IceCandidateFormatter{
 	 * @phpstan-return list<string>
 	 */
 	public static function advertise(array $candidates, array $addresses) : array{
+		$addresses = array_values(array_unique(array_map(fn(string $address) => InternetAddress::normalizeIp($address) ?? $address, $addresses)));
 		$kept = [];
 		$matchedAddresses = [];
 		$port = null;
@@ -89,9 +97,10 @@ final class IceCandidateFormatter{
 			if($port === null && $parts[7] === "host" && strtolower($parts[2]) === "udp"){
 				$port = $parts[5];
 			}
-			if(in_array($parts[4], $addresses, true)){
+			$address = InternetAddress::normalizeIp($parts[4]) ?? $parts[4];
+			if(in_array($address, $addresses, true)){
 				$kept[] = $candidate;
-				$matchedAddresses[$parts[4]] = true;
+				$matchedAddresses[$address] = true;
 			}
 		}
 		if($port === null){
@@ -108,7 +117,8 @@ final class IceCandidateFormatter{
 	}
 
 	/**
-	 * Builds a server-reflexive candidate attribute value with an unknown base, as `raddr 0.0.0.0 rport 0`.
+	 * Builds a server-reflexive candidate attribute value with an unknown base, as `raddr 0.0.0.0 rport 0`
+	 * (`raddr :: rport 0` for IPv6).
 	 */
 	private static function serverReflexive(string $foundation, string $address, string $port) : string{
 		return implode(" ", [
@@ -121,10 +131,14 @@ final class IceCandidateFormatter{
 			"typ",
 			"srflx",
 			"raddr",
-			"0.0.0.0",
+			self::unspecifiedAddressFor($address),
 			"rport",
 			"0"
 		]);
+	}
+
+	private static function unspecifiedAddressFor(string $address) : string{
+		return filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false ? "::" : "0.0.0.0";
 	}
 
 	/**
@@ -159,7 +173,7 @@ final class IceCandidateFormatter{
 		// Zero reflexive/relayed base addresses for privacy while satisfying expected format
 		if($type === "relay" || $type === "srflx"){
 			$formatted[] = "raddr";
-			$formatted[] = "0.0.0.0";
+			$formatted[] = self::unspecifiedAddressFor($address);
 			$formatted[] = "rport";
 			$formatted[] = "0";
 		}

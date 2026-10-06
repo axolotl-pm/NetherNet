@@ -50,6 +50,22 @@ final class IceCandidateFormatterTest extends TestCase{
 		self::assertStringContainsString("203.0.113.10 38922 typ srflx", $advertised[1]);
 	}
 
+	public function testIpv6AddressMatchesRegardlessOfNotation() : void{
+		self::assertSame([self::IPV6_HOST], IceCandidateFormatter::advertise([self::IPV6_HOST], ["[FD7A:115C:A1E0:0:0:0:0:1]"]));
+	}
+
+	public function testIpv6ServerReflexiveUsesIpv6UnspecifiedRelatedAddress() : void{
+		$advertised = IceCandidateFormatter::advertise([self::LAN_HOST], ["2001:db8::1"]);
+
+		self::assertSame(["advertised 1 udp " . ((100 << 24) + (65535 << 8) + 255) . " 2001:db8::1 38922 typ srflx raddr :: rport 0"], $advertised);
+	}
+
+	public function testFormattedIpv6ServerReflexiveUsesIpv6UnspecifiedRelatedAddress() : void{
+		$formatted = IceCandidateFormatter::format("candidate:1 1 UDP 1686052607 2001:db8::1 38922 typ srflx raddr fd7a:115c:a1e0::1 rport 38922", "ufrag", 0);
+
+		self::assertStringContainsString("2001:db8::1 38922 typ srflx raddr :: rport 0 ", $formatted);
+	}
+
 	/**
 	 * Without a UDP host candidate, no port is available for external addresses, so no synthetic candidates are generated.
 	 */

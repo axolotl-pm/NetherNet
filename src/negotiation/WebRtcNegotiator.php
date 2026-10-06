@@ -23,13 +23,12 @@ use pocketmine\nethernet\crypto\CryptoException;
 use pocketmine\nethernet\identity\IdentityException;
 use pocketmine\nethernet\identity\IdentityProvider;
 use pocketmine\nethernet\identity\IdentityVerifier;
+use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\sdp\SdpException;
 use pocketmine\nethernet\sdp\SessionDescription;
 use pocketmine\nethernet\session\Reliability;
 use pocketmine\nethernet\WebRtcResources;
-use function filter_var;
 use function microtime;
-use const FILTER_VALIDATE_IP;
 
 final class WebRtcNegotiator implements Negotiator{
 
@@ -73,7 +72,7 @@ final class WebRtcNegotiator implements Negotiator{
 			throw new \InvalidArgumentException("Maximum remote candidates must be positive, got $maxRemoteCandidates");
 		}
 		foreach($advertisedAddresses ?? [] as $address){
-			if(filter_var($address, FILTER_VALIDATE_IP) === false){
+			if(InternetAddress::normalizeIp($address) === null){
 				throw new \InvalidArgumentException("Advertised address \"$address\" is not an IP address");
 			}
 		}
