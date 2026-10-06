@@ -16,6 +16,7 @@ namespace pocketmine\nethernet\signaling\http;
 
 use PHPUnit\Framework\TestCase;
 use pocketmine\nethernet\FakeNegotiator;
+use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\negotiation\CandidateMode;
 use pocketmine\nethernet\negotiation\Negotiator;
 use pocketmine\nethernet\signaling\SignalingException;
@@ -63,7 +64,7 @@ final class HttpSignalingTest extends TestCase{
 	private function start(Negotiator $negotiator, ?ServerStatusProvider $statusProvider = null, ?ReverseProxy $reverseProxy = null) : void{
 		for($attempt = 0; $attempt < 20; ++$attempt){
 			$port = random_int(20000, 60000);
-			$signaling = new HttpSignaling($negotiator, "127.0.0.1", $port, statusProvider: $statusProvider, reverseProxy: $reverseProxy);
+			$signaling = new HttpSignaling($negotiator, new InternetAddress("127.0.0.1", $port, 4), statusProvider: $statusProvider, reverseProxy: $reverseProxy);
 
 			try{
 				$signaling->start();

@@ -16,6 +16,7 @@ namespace pocketmine\nethernet\signaling\http;
 
 use PHPUnit\Framework\TestCase;
 use pocketmine\nethernet\FakeNegotiator;
+use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\RecordingLogger;
 use pocketmine\nethernet\signaling\SignalingException;
 use function fclose;
@@ -97,7 +98,7 @@ final class HttpSignalingTlsTest extends TestCase{
 	private function start(array $tlsContext, RecordingLogger $logger) : int{
 		for($attempt = 0; $attempt < 25; ++$attempt){
 			$port = random_int(20000, 60000);
-			$signaling = new HttpSignaling(new FakeNegotiator("answer-sdp"), "127.0.0.1", $port, $tlsContext, $logger);
+			$signaling = new HttpSignaling(new FakeNegotiator("answer-sdp"), new InternetAddress("127.0.0.1", $port, 4), $tlsContext, $logger);
 
 			try{
 				$signaling->start();
@@ -161,8 +162,7 @@ final class HttpSignalingTlsTest extends TestCase{
 	public function testUnreadableCertificateIsRefusedAtStartup() : void{
 		$signaling = new HttpSignaling(
 			new FakeNegotiator("answer-sdp"),
-			"127.0.0.1",
-			random_int(20000, 60000),
+			new InternetAddress("127.0.0.1", random_int(20000, 60000), 4),
 			["local_cert" => sys_get_temp_dir() . DIRECTORY_SEPARATOR . "definitely-not-here.pem"]
 		);
 

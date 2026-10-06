@@ -23,8 +23,6 @@ use pocketmine\nethernet\signaling\SignalingException;
 use pocketmine\nethernet\signaling\SignalingInterface;
 use function array_values;
 use function count;
-use function strrpos;
-use function substr;
 
 final class NetherNetServer{
 
@@ -130,7 +128,8 @@ final class NetherNetServer{
 		$this->negotiator->tick();
 
 		foreach($this->negotiator->takeEstablished() as $peer){
-			$address = self::stripPort($peer->peerConnection->getRemoteAddress());
+			$remoteAddress = $peer->peerConnection->getRemoteAddress();
+			$address = $remoteAddress === null ? null : InternetAddress::parse($remoteAddress)?->ip;
 			if($address !== null && $this->blockTracker->isBlocked($address)){
 				$this->logger?->debug("Closed connection from blocked address: $address");
 				try{
@@ -156,7 +155,7 @@ final class NetherNetServer{
 		$this->logger?->debug("Blocked $address" . ($timeout < 0 ? "" : " for $timeout seconds"));
 
 		foreach($this->sessionManager->getSessions() as $session){
-			if(self::stripPort($session->getRemoteAddress()) === $address){
+			if($session->getRemoteAddress()?->ip === $address){
 				$session->initiateDisconnect(DisconnectReason::ADDRESS_BLOCKED);
 			}
 		}
@@ -165,16 +164,6 @@ final class NetherNetServer{
 	public function unblockAddress(string $address) : void{
 		$this->blockTracker->unblock($address);
 		$this->logger?->debug("Unblocked $address");
-	}
-
-	private static function stripPort(?string $remoteAddress) : ?string{
-		if($remoteAddress === null){
-			return null;
-		}
-
-		$separator = strrpos($remoteAddress, ":");
-
-		return $separator === false ? $remoteAddress : substr($remoteAddress, 0, $separator);
 	}
 
 	/**

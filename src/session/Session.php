@@ -20,6 +20,7 @@ use pmmp\webrtc\PeerConnection;
 use pmmp\webrtc\WebRtcException;
 use pocketmine\nethernet\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\identity\PeerIdentity;
+use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\session\framing\Assembler;
 use pocketmine\nethernet\session\framing\FramingException;
 use pocketmine\nethernet\session\framing\Segmenter;
@@ -81,8 +82,10 @@ final class Session{
 	 */
 	public function getIdentity() : ?PeerIdentity{ return $this->identity; }
 
-	public function getRemoteAddress() : ?string{
-		return $this->closed ? null : $this->peerConnection->getRemoteAddress();
+	public function getRemoteAddress() : ?InternetAddress{
+		$address = $this->closed ? null : $this->peerConnection->getRemoteAddress();
+
+		return $address === null ? null : InternetAddress::parse($address);
 	}
 
 	public function getState() : ConnectionState{

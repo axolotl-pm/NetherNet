@@ -14,8 +14,8 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\http;
 
+use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\negotiation\Negotiation;
-use function str_contains;
 
 /**
  * Tracks the state of an inbound HTTP/HTTPS signaling connection.
@@ -51,22 +51,17 @@ final class HttpConnection{
 	/**
 	 * @param resource $stream      Accepted stream resource for TLS and I/O.
 	 * @param \Socket  $socket      Underlying socket reference preventing premature descriptor closure.
-	 * @param string   $peerAddress IP address of the peer, or an empty string if it could not be read.
+	 * @param InternetAddress|null $peerAddress Address of the peer, or null if it could not be read.
 	 */
 	public function __construct(
 		public readonly mixed $stream,
 		public readonly \Socket $socket,
-		public readonly string $peerAddress,
-		public readonly int $peerPort,
+		public readonly ?InternetAddress $peerAddress,
 		public float $headDeadline,
 		public float $bodyDeadline
 	){}
 
 	public function peerName() : string{
-		if($this->peerAddress === ""){
-			return "unknown";
-		}
-
-		return (str_contains($this->peerAddress, ":") ? "[" . $this->peerAddress . "]" : $this->peerAddress) . ":" . $this->peerPort;
+		return $this->peerAddress?->toString() ?? "unknown";
 	}
 }

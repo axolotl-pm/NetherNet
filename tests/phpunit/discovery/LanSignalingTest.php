@@ -21,6 +21,7 @@ use pocketmine\nethernet\discovery\packet\PacketSerializer;
 use pocketmine\nethernet\discovery\packet\RequestPacket;
 use pocketmine\nethernet\discovery\packet\ResponsePacket;
 use pocketmine\nethernet\FakeNegotiator;
+use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\negotiation\CandidateMode;
 use pocketmine\nethernet\negotiation\ErrorCode;
 use pocketmine\nethernet\negotiation\Negotiator;
@@ -91,8 +92,7 @@ final class LanSignalingTest extends TestCase{
 				$negotiator,
 				new FixedServerDataProvider(new ServerData(serverName: "test host", protocol: 2181, version: "1.26.50", levelName: "test world", playerCount: 3, maxPlayerCount: 10)),
 				self::HOST_NETWORK_ID,
-				"127.0.0.1",
-				$port
+				new InternetAddress("127.0.0.1", $port, 4)
 			);
 
 			try{
@@ -118,8 +118,7 @@ final class LanSignalingTest extends TestCase{
 				$negotiator,
 				new FixedServerDataProvider(new ServerData(serverName: "test host", protocol: 2181, version: "1.26.50", levelName: "test world")),
 				self::HOST_NETWORK_ID,
-				"127.0.0.1",
-				$port
+				new InternetAddress("127.0.0.1", $port, 4)
 			);
 			$server->addSignaling($signaling);
 

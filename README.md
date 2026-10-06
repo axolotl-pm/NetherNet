@@ -20,6 +20,7 @@ use pocketmine\nethernet\discovery\MutableServerDataProvider;
 use pocketmine\nethernet\discovery\ServerData;
 use pocketmine\nethernet\identity\SelfSignedIdentityProvider;
 use pocketmine\nethernet\identity\ServerIdentity;
+use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\NetherNetServer;
 use pocketmine\nethernet\ServerConfiguration;
 use pocketmine\nethernet\ServerEventListener;
@@ -55,8 +56,7 @@ $server = NetherNetServer::create($config, $listener);
 // 3. Add signaling transports (HTTP and LAN)
 $server->addSignaling(new HttpSignaling(
     negotiator: $server->getNegotiator(),
-    bindAddress: '0.0.0.0',
-    port: 19132
+    bindAddress: new InternetAddress('0.0.0.0', 19132, 4)
 ));
 
 $serverDataProvider = new MutableServerDataProvider(

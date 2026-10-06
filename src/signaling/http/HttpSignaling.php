@@ -16,6 +16,7 @@ namespace pocketmine\nethernet\signaling\http;
 
 use pocketmine\nethernet\AddressBlockTracker;
 use pocketmine\nethernet\crypto\OpenSsl;
+use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\negotiation\NegotiationException;
 use pocketmine\nethernet\negotiation\Negotiator;
 use pocketmine\nethernet\signaling\SignalingException;
@@ -59,6 +60,9 @@ use function strlen;
 use function strpos;
 use function substr;
 use const AF_INET;
+use const AF_INET6;
+use const IPPROTO_IPV6;
+use const IPV6_V6ONLY;
 use const SO_REUSEADDR;
 use const SOCK_STREAM;
 use const SOCKET_EWOULDBLOCK;
@@ -116,8 +120,7 @@ final class HttpSignaling implements SignalingInterface{
 	 */
 	public function __construct(
 		private readonly Negotiator $negotiator,
-		private readonly string $bindAddress,
-		private readonly int $port,
+		private readonly InternetAddress $bindAddress,
 		private readonly ?array $tlsContext = null,
 		private readonly ?\Logger $logger = null,
 		private readonly int $maxConnections = self::DEFAULT_MAX_CONNECTIONS,
@@ -142,24 +145,28 @@ final class HttpSignaling implements SignalingInterface{
 
 		$this->checkTlsFilesReadable();
 
-		$socket = @socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+		$ipv6 = $this->bindAddress->version === 6;
+		$socket = @socket_create($ipv6 ? AF_INET6 : AF_INET, SOCK_STREAM, SOL_TCP);
 		if($socket === false){
 			throw new SignalingException("Could not create a socket: " . socket_strerror(socket_last_error()));
 		}
 
 		@socket_set_option($socket, SOL_SOCKET, SO_REUSEADDR, 1);
+		if($ipv6){
+			@socket_set_option($socket, IPPROTO_IPV6, IPV6_V6ONLY, 1);
+		}
 
-		if(!@socket_bind($socket, $this->bindAddress, $this->port)){
+		if(!@socket_bind($socket, $this->bindAddress->ip, $this->bindAddress->port)){
 			$error = socket_strerror(socket_last_error($socket));
 			socket_close($socket);
 
-			throw new SignalingException("Failed to listen on $this->bindAddress:$this->port: $error");
+			throw new SignalingException("Failed to listen on $this->bindAddress: $error");
 		}
 		if(!@socket_listen($socket, self::BACKLOG)){
 			$error = socket_strerror(socket_last_error($socket));
 			socket_close($socket);
 
-			throw new SignalingException("Failed to listen on $this->bindAddress:$this->port: $error");
+			throw new SignalingException("Failed to listen on $this->bindAddress: $error");
 		}
 
 		socket_set_nonblock($socket);
@@ -191,12 +198,12 @@ final class HttpSignaling implements SignalingInterface{
 	/**
 	 * Exports the accepted socket descriptor into a non-blocking stream for TLS and HTTP I/O.
 	 */
-	private function adopt(\Socket $connection, string $peerAddress, int $peerPort, float $now) : ?HttpConnection{
+	private function adopt(\Socket $connection, ?InternetAddress $peerAddress, float $now) : ?HttpConnection{
 		socket_set_nonblock($connection);
 
 		$stream = socket_export_stream($connection);
 		if($stream === false){
-			$this->logger?->debug("Could not read the accepted socket as a stream; dropping " . ($peerAddress === "" ? "unknown" : "$peerAddress:$peerPort"));
+			$this->logger?->debug("Could not read the accepted socket as a stream; dropping " . ($peerAddress?->toString() ?? "unknown"));
 			socket_close($connection);
 
 			return null;
@@ -207,7 +214,6 @@ final class HttpSignaling implements SignalingInterface{
 			$stream,
 			$connection,
 			$peerAddress,
-			$peerPort,
 			$now + self::HEAD_TIMEOUT,
 			$now + self::BODY_TIMEOUT
 		);
@@ -236,15 +242,12 @@ final class HttpSignaling implements SignalingInterface{
 		socket_clear_error();
 
 		while(($accepted = @socket_accept($socket)) !== false){
-			$peerAddress = "";
+			$peerIp = "";
 			$peerPort = 0;
-			if(!@socket_getpeername($accepted, $peerAddress, $peerPort)){
-				$peerAddress = "";
-				$peerPort = 0;
-			}
+			$peerAddress = @socket_getpeername($accepted, $peerIp, $peerPort) ? new InternetAddress($peerIp, $peerPort, $this->bindAddress->version) : null;
 
-			if($this->blockTracker->isBlocked($peerAddress)){
-				$this->logger?->debug("Dropped a signaling connection from blocked address $peerAddress");
+			if($peerAddress !== null && $this->blockTracker->isBlocked($peerAddress->ip)){
+				$this->logger?->debug("Dropped a signaling connection from blocked address $peerAddress->ip");
 				socket_close($accepted);
 				continue;
 			}
@@ -254,7 +257,7 @@ final class HttpSignaling implements SignalingInterface{
 				continue;
 			}
 
-			$connection = $this->adopt($accepted, $peerAddress, $peerPort, $now);
+			$connection = $this->adopt($accepted, $peerAddress, $now);
 			if($connection === null){
 				continue;
 			}
@@ -483,7 +486,7 @@ final class HttpSignaling implements SignalingInterface{
 			throw new HttpException(500, "Dispatching a request that was never parsed");
 		}
 
-		$peerAddress = $connection->peerAddress !== "" ? $connection->peerAddress : null;
+		$peerAddress = $connection->peerAddress?->ip;
 		if($peerAddress !== null && $this->reverseProxy !== null && $this->reverseProxy->trusts($peerAddress)){
 			$peerAddress = $this->reverseProxy->clientAddress($request);
 			if($peerAddress === null){
