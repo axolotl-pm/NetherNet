@@ -27,6 +27,12 @@ interface Negotiation{
 
 	public function isFailed() : bool;
 
+	/**
+	 * Returns whether the peer connection is gone: the negotiation failed, or the connection it established has
+	 * since been closed.
+	 */
+	public function isClosed() : bool;
+
 	public function getFailureReason() : ?string;
 
 	public function getFailureCode() : ErrorCode;
@@ -45,4 +51,9 @@ interface Negotiation{
 	public function takeLocalCandidates() : array;
 
 	public function fail(string $reason, ErrorCode $code = ErrorCode::GENERIC_FAILURE) : void;
+
+	/**
+	 * Closes the peer connection, including one that is established and has been handed over.
+	 */
+	public function close() : void;
 }

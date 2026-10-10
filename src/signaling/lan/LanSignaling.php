@@ -35,7 +35,6 @@ use pocketmine\nethernet\utils\AddressBlockList;
 use pocketmine\nethernet\utils\DatagramSocket;
 use pocketmine\nethernet\utils\InternetAddress;
 use pocketmine\nethernet\utils\SocketException;
-use function count;
 use function sprintf;
 
 /**
@@ -54,8 +53,10 @@ final class LanSignaling implements Signaling{
 	private ?DatagramSocket $socket = null;
 
 	/**
-	 * @var PendingConnection[]
-	 * @phpstan-var array<string, PendingConnection>
+	 * Kept until the peer connection closes, so that a signal for an established connection still finds it.
+	 *
+	 * @var LanConnection[]
+	 * @phpstan-var array<string, LanConnection>
 	 */
 	private array $connections = [];
 
@@ -214,7 +215,7 @@ final class LanSignaling implements Signaling{
 		if(isset($this->connections[$key])){
 			return;
 		}
-		if(count($this->connections) >= $this->maxConnections){
+		if($this->countNegotiating() >= $this->maxConnections){
 			$this->logger->debug("Refused an offer from " . self::formatId($senderId) . ": connection limit of $this->maxConnections reached");
 			$this->sendSignal($senderId, Signal::error($signal->connectionId, ErrorCode::GENERIC_FAILURE), $address);
 
@@ -230,7 +231,7 @@ final class LanSignaling implements Signaling{
 			return;
 		}
 
-		$this->connections[$key] = new PendingConnection($negotiation, $senderId, $address, $signal->connectionId);
+		$this->connections[$key] = new LanConnection($negotiation, $senderId, $address, $signal->connectionId);
 	}
 
 	private function handleCandidate(Signal $signal, string $key) : void{
@@ -254,7 +255,22 @@ final class LanSignaling implements Signaling{
 
 		/* The peer already knows the connection failed, so it is dropped here rather than reported back. */
 		unset($this->connections[$key]);
-		$connection->negotiation->fail("Peer reported error code " . $signal->data, ErrorCode::GENERIC_FAILURE);
+		if($connection->negotiation->isFinished()){
+			$connection->negotiation->close();
+		}else{
+			$connection->negotiation->fail("Peer reported error code " . $signal->data, ErrorCode::GENERIC_FAILURE);
+		}
+	}
+
+	private function countNegotiating() : int{
+		$count = 0;
+		foreach($this->connections as $connection){
+			if(!$connection->negotiation->isFinished()){
+				$count++;
+			}
+		}
+
+		return $count;
 	}
 
 	private function processConnections() : void{
@@ -262,7 +278,7 @@ final class LanSignaling implements Signaling{
 			foreach($connection->takeSignals() as $signal){
 				$this->sendSignal($connection->peerId, $signal, $connection->address);
 			}
-			if($connection->negotiation->isFinished()){
+			if($connection->negotiation->isClosed()){
 				unset($this->connections[$key]);
 			}
 		}

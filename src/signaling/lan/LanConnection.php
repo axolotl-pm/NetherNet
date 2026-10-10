@@ -22,7 +22,7 @@ use pocketmine\nethernet\utils\InternetAddress;
 /**
  * @internal
  */
-final class PendingConnection{
+final class LanConnection{
 
 	private bool $answerSent = false;
 

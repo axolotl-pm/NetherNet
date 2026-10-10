@@ -64,6 +64,10 @@ final class TransportNegotiation implements Negotiation{
 
 	public function isFailed() : bool{ return $this->state === NegotiationState::FAILED; }
 
+	public function isClosed() : bool{
+		return $this->state === NegotiationState::FAILED || $this->transport->getState()->isBroken();
+	}
+
 	public function getFailureReason() : ?string{ return $this->failureReason; }
 
 	public function getFailureCode() : ErrorCode{ return $this->failureCode; }
@@ -122,6 +126,16 @@ final class TransportNegotiation implements Negotiation{
 		foreach($this->channels as $channel){
 			$channel->close();
 		}
+		$this->transport->close();
+	}
+
+	public function close() : void{
+		if(!$this->state->isFinished()){
+			$this->fail("Closed");
+
+			return;
+		}
+
 		$this->transport->close();
 	}
 

@@ -28,6 +28,8 @@ final class FakeNegotiation implements Negotiation{
 	 */
 	public array $remoteCandidates = [];
 
+	public bool $closed = false;
+
 	private bool $failed = false;
 	private ?string $failureReason = null;
 	private ErrorCode $failureCode = ErrorCode::NONE;
@@ -46,6 +48,8 @@ final class FakeNegotiation implements Negotiation{
 	public function isFinished() : bool{ return $this->failed; }
 
 	public function isFailed() : bool{ return $this->failed; }
+
+	public function isClosed() : bool{ return $this->failed || $this->closed; }
 
 	public function getFailureReason() : ?string{ return $this->failureReason; }
 
@@ -66,5 +70,9 @@ final class FakeNegotiation implements Negotiation{
 		$this->failed = true;
 		$this->failureReason = $reason;
 		$this->failureCode = $code;
+	}
+
+	public function close() : void{
+		$this->closed = true;
 	}
 }
