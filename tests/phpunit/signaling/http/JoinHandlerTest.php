@@ -108,7 +108,7 @@ final class JoinHandlerTest extends TestCase{
 		self::assertNull($handler->handle($request, "offer", self::peer()));
 	}
 
-	public function testOfferTheNegotiatorRefusesIsABadRequest() : void{
+	public function testOfferTheNegotiatorRefusesIsReportedAsItsErrorCode() : void{
 		$negotiator = new class extends \stdClass implements \pocketmine\nethernet\negotiation\Negotiator{
 			public function beginNegotiation(string $offerSdp, string $networkId, \pocketmine\nethernet\negotiation\CandidateMode $candidateMode = \pocketmine\nethernet\negotiation\CandidateMode::BUNDLED, ?string $peerAddress = null) : Negotiation{
 				throw new NegotiationException("offer is no good", ErrorCode::FAILED_TO_SET_REMOTE_DESCRIPTION);
@@ -121,13 +121,10 @@ final class JoinHandlerTest extends TestCase{
 			public function shutdown() : void{}
 		};
 		$handler = new JoinHandler($negotiator, $this->blockTracker, null, null, new RecordingLogger());
-		$request = self::offer();
+		$response = $handler->handle(self::offer(), "offer", self::peer());
 
-		try{
-			$handler->handle($request, "offer", self::peer());
-			self::fail("a refused offer was accepted");
-		}catch(HttpException $e){
-			self::assertSame(HttpStatus::BAD_REQUEST, $e->getStatus());
-		}
+		self::assertInstanceOf(HttpResponse::class, $response);
+		self::assertSame(HttpStatus::INTERNAL_SERVER_ERROR, $response->status);
+		self::assertSame((string) ErrorCode::FAILED_TO_SET_REMOTE_DESCRIPTION->value, $response->body);
 	}
 }

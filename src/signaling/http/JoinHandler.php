@@ -18,6 +18,7 @@ use pocketmine\nethernet\info\ServerInfoProvider;
 use pocketmine\nethernet\negotiation\Negotiation;
 use pocketmine\nethernet\negotiation\NegotiationException;
 use pocketmine\nethernet\negotiation\Negotiator;
+use pocketmine\nethernet\protocol\ErrorCode;
 use pocketmine\nethernet\utils\AddressBlockList;
 use pocketmine\nethernet\utils\InternetAddress;
 use function json_encode;
@@ -119,8 +120,17 @@ final class JoinHandler{
 		try{
 			return $this->negotiator->beginNegotiation($body, $networkId, peerAddress: $clientAddress);
 		}catch(NegotiationException $e){
-			throw new HttpException(HttpStatus::BAD_REQUEST, $e->getMessage());
+			$this->logger->debug("Refused an offer: " . $e->getMessage());
+
+			return self::failure($e->getErrorCode());
 		}
+	}
+
+	/**
+	 * A failure is reported as its error code and nothing else, which is the part a client can act on.
+	 */
+	private static function failure(ErrorCode $code) : HttpResponse{
+		return new HttpResponse(HttpStatus::INTERNAL_SERVER_ERROR, (string) $code->value, self::CONTENT_TYPE_TEXT);
 	}
 
 	private function probe() : HttpResponse{
@@ -156,7 +166,7 @@ final class JoinHandler{
 		if($negotiation->isFailed()){
 			$this->logger->debug("Negotiation failed: " . ($negotiation->getFailureReason() ?? "no reason given"));
 
-			return new HttpResponse(HttpStatus::INTERNAL_SERVER_ERROR, (string) $negotiation->getFailureCode()->value, self::CONTENT_TYPE_TEXT);
+			return self::failure($negotiation->getFailureCode());
 		}
 
 		return null;
