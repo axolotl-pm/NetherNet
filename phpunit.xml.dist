@@ -3,11 +3,22 @@
 		 xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
 		 bootstrap="vendor/autoload.php"
 		 colors="true"
+		 cacheDirectory=".phpunit.cache"
+		 executionOrder="random"
+		 beStrictAboutOutputDuringTests="true"
 		 failOnWarning="true"
-		 failOnRisky="true">
+		 failOnRisky="true"
+		 failOnDeprecation="true"
+		 failOnNotice="true"
+		 failOnPhpunitDeprecation="true">
 	<testsuites>
 		<testsuite name="NetherNet">
 			<directory>tests/phpunit</directory>
 		</testsuite>
 	</testsuites>
+	<source>
+		<include>
+			<directory>src</directory>
+		</include>
+	</source>
 </phpunit>

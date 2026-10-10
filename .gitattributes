@@ -6,3 +6,5 @@
 /.gitignore export-ignore
 /phpstan.neon.dist export-ignore
 /phpunit.xml.dist export-ignore
+/.editorconfig export-ignore
+/.php-cs-fixer.php export-ignore

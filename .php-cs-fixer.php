@@ -51,9 +51,17 @@ COMMENT,
 			'location' => 'after_open',
 		],
 		'indentation_type' => true,
+		'logical_operators' => true,
+		'native_constant_invocation' => [
+			'scope' => 'namespaced'
+		],
 		'native_function_invocation' => [
 			'scope' => 'namespaced',
 			'include' => ['@all'],
+		],
+		'new_with_braces' => [
+			'named_class' => true,
+			'anonymous_class' => false,
 		],
 		'no_closing_tag' => true,
 		'no_empty_phpdoc' => true,
@@ -72,6 +80,12 @@ COMMENT,
 				'const',
 			],
 			'sort_algorithm' => 'alpha'
+		],
+		'phpdoc_align' => [
+			'align' => 'vertical',
+			'tags' => [
+				'param',
+			]
 		],
 		'phpdoc_line_span' => [
 			'property' => 'single',

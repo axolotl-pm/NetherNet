@@ -2,6 +2,7 @@
 /composer.lock
 /.idea/
 /.phpunit.result.cache
+/.phpunit.cache/
 /phpstan.neon
 /phpunit.xml
 /.php-cs-fixer.cache

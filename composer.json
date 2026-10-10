@@ -2,11 +2,11 @@
 	"name": "axolotl-pm/nethernet",
 	"description": "A NetherNet (WebRTC) transport implementation written in PHP",
 	"type": "library",
-	"license": "LGPL-3.0",
-	"version": "0.1.0",
+	"license": "LGPL-3.0-or-later",
 	"require": {
 		"php": "^8.1",
 		"php-64bit": "*",
+		"php-ipv6": "*",
 		"ext-encoding": "~1.0.0",
 		"ext-hash": "*",
 		"ext-json": "*",
@@ -40,6 +40,8 @@
 	},
 	"scripts": {
 		"cs-check": "php-cs-fixer fix --dry-run --diff --ansi",
-		"cs-fix": "php-cs-fixer fix --ansi"
+		"cs-fix": "php-cs-fixer fix --ansi",
+		"phpstan": "phpstan analyse --no-progress",
+		"phpunit": "phpunit"
 	}
 }

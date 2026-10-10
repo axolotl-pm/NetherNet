@@ -8,6 +8,7 @@ parameters:
 	phpVersion: 80100
 	checkMissingCallableSignature: true
 	treatPhpDocTypesAsCertain: false
+	rememberPossiblyImpureFunctionValues: false
 	paths:
 		- src
 		- tests/phpunit
