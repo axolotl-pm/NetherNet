@@ -121,7 +121,7 @@ final class HttpSignalingTest extends TestCase{
 
 		self::assertStringStartsWith("HTTP/1.1 200 OK\r\n", $response);
 		self::assertStringContainsString("Content-Type: application/json\r\n", $response);
-		self::assertStringEndsWith('"name":"Café Server / #1","protocol":800,"version":"1.21.100","level":"Bedrock level","players":3,"maxPlayers":20,"gameType":0}', $response);
+		self::assertStringEndsWith('{"dataVersion":7,"name":"Café Server / #1","protocol":800,"version":"1.21.100","level":"Bedrock level","players":3,"maxPlayers":20,"gameType":0,"editor":false,"hardcore":false,"onlineAuth":true,"selfSignedAuth":true,"nonce":"","transportLayer":2,"connection":4}', $response);
 	}
 
 	/**

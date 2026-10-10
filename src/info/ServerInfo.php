@@ -19,6 +19,13 @@ namespace pocketmine\nethernet\info;
  */
 final class ServerInfo{
 
+	/** Version of the layout this information is advertised in. */
+	public const DATA_VERSION = 7;
+
+	public const TRANSPORT_LAYER_NETHERNET = 2;
+
+	public const CONNECTION_TYPE_NETHERNET = 4;
+
 	/**
 	 * @param string $nonce Optional verification nonce echoed back in client Login ClientData.
 	 */

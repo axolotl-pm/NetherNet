@@ -29,10 +29,6 @@ use function strlen;
  */
 final class ServerInfoCodec{
 
-	public const VERSION = 7;
-
-	public const CONNECTION_TYPE_NETHERNET = 4;
-
 	private function __construct(){
 		//NOOP
 	}
@@ -40,7 +36,7 @@ final class ServerInfoCodec{
 	public static function encode(ServerInfo $info) : string{
 		$out = new ByteBufferWriter();
 
-		Byte::writeUnsigned($out, self::VERSION);
+		Byte::writeUnsigned($out, ServerInfo::DATA_VERSION);
 		self::writeString($out, $info->serverName);
 		VarInt::writeSignedInt($out, $info->protocol);
 		self::writeString($out, $info->gameVersion);
@@ -53,7 +49,7 @@ final class ServerInfoCodec{
 		Byte::writeUnsigned($out, $info->acceptsOnlineAuth ? 1 : 0);
 		Byte::writeUnsigned($out, $info->acceptsSelfSignedAuth ? 1 : 0);
 		self::writeString($out, $info->nonce);
-		VarInt::writeSignedInt($out, self::CONNECTION_TYPE_NETHERNET);
+		VarInt::writeSignedInt($out, ServerInfo::CONNECTION_TYPE_NETHERNET);
 
 		return $out->getData();
 	}
@@ -66,8 +62,8 @@ final class ServerInfoCodec{
 
 		try{
 			$version = Byte::readUnsigned($in);
-			if($version !== self::VERSION){
-				throw new DiscoveryException("Expected server advertisement version " . self::VERSION . ", got $version");
+			if($version !== ServerInfo::DATA_VERSION){
+				throw new DiscoveryException("Expected server advertisement version " . ServerInfo::DATA_VERSION . ", got $version");
 			}
 
 			$serverName = self::readString($in);
