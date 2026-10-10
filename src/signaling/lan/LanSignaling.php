@@ -216,8 +216,8 @@ final class LanSignaling implements Signaling{
 			return;
 		}
 		if($this->countNegotiating() >= $this->maxConnections){
-			$this->logger->debug("Refused an offer from " . self::formatId($senderId) . ": connection limit of $this->maxConnections reached");
-			$this->sendSignal($senderId, Signal::error($signal->connectionId, ErrorCode::GENERIC_FAILURE), $address);
+			/* Nothing is held for this offer, so nothing is owed to whoever sent it. */
+			$this->logger->debug("Ignored an offer from " . self::formatId($senderId) . ": connection limit of $this->maxConnections reached");
 
 			return;
 		}
