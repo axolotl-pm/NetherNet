@@ -29,12 +29,14 @@ use function preg_replace;
 use function restore_error_handler;
 use function set_error_handler;
 use function str_split;
+use function strcasecmp;
 use function stream_context_set_option;
 use function stream_socket_enable_crypto;
 use function stream_socket_recvfrom;
 use function strlen;
 use function strpos;
 use function substr;
+use function trim;
 use const INF;
 use const STREAM_CRYPTO_METHOD_TLS_SERVER;
 use const STREAM_PEEK;
@@ -60,6 +62,7 @@ final class HttpConnection{
 
 	private const READ_CHUNK_SIZE = 65536;
 	private const MAX_DRAIN_ON_CLOSE = 262144;
+	private const CONTINUE_RESPONSE = "HTTP/1.1 100 Continue\r\n\r\n";
 
 	private HttpConnectionState $state;
 
@@ -261,8 +264,20 @@ final class HttpConnection{
 
 		/* Turns away what cannot be served before any of its body is read. */
 		$handler->route($this->request);
+		$expectsContinue = strcasecmp(trim($this->request->getHeader("expect") ?? ""), "100-continue") === 0;
 		$this->contentLength = $this->request->method === HttpRequest::METHOD_POST ? $this->request->getContentLength(self::MAX_BODY_SIZE) : 0;
 		$this->transitionTo(HttpConnectionState::READING_BODY, $this->requestStart + self::BODY_TIMEOUT);
+
+		if($expectsContinue && strlen($this->input) - $this->bodyOffset < $this->contentLength){
+			/* A client that asks first holds its body back until told to send it. */
+			$written = @fwrite($this->stream, self::CONTINUE_RESPONSE);
+			if($written !== false && $written !== 0 && $written !== strlen(self::CONTINUE_RESPONSE)){
+				/* Half of it on the wire would corrupt whatever response follows. */
+				$this->state = HttpConnectionState::DONE;
+
+				return false;
+			}
+		}
 
 		return true;
 	}
