@@ -14,14 +14,11 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\lan\packet;
 
-use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 
 final class RequestPacket extends Packet{
 
 	public function getType() : PacketType{ return PacketType::REQUEST; }
-
-	public function decodeBody(ByteBufferReader $in) : void{}
 
 	public function encodeBody(ByteBufferWriter $out) : void{}
 }

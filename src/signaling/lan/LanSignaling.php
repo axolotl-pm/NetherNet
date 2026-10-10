@@ -19,6 +19,7 @@ use pocketmine\nethernet\negotiation\CandidateMode;
 use pocketmine\nethernet\negotiation\NegotiationException;
 use pocketmine\nethernet\negotiation\Negotiator;
 use pocketmine\nethernet\protocol\ErrorCode;
+use pocketmine\nethernet\signaling\lan\packet\DiscoveryException;
 use pocketmine\nethernet\signaling\lan\packet\MessagePacket;
 use pocketmine\nethernet\signaling\lan\packet\Packet;
 use pocketmine\nethernet\signaling\lan\packet\PacketSerializer;
@@ -31,48 +32,26 @@ use pocketmine\nethernet\signaling\SignalingException;
 use pocketmine\nethernet\signaling\SignalingState;
 use pocketmine\nethernet\signaling\SignalType;
 use pocketmine\nethernet\utils\AddressBlockList;
+use pocketmine\nethernet\utils\DatagramSocket;
 use pocketmine\nethernet\utils\InternetAddress;
+use pocketmine\nethernet\utils\SocketException;
 use function count;
-use function socket_bind;
-use function socket_clear_error;
-use function socket_close;
-use function socket_create;
-use function socket_last_error;
-use function socket_recvfrom;
-use function socket_sendto;
-use function socket_set_nonblock;
-use function socket_set_option;
-use function socket_strerror;
 use function sprintf;
-use function strlen;
-use const AF_INET;
-use const AF_INET6;
-use const IPPROTO_IPV6;
-use const IPV6_V6ONLY;
-use const SO_BROADCAST;
-use const SO_REUSEADDR;
-use const SOCK_DGRAM;
-use const SOCKET_ECONNRESET;
-use const SOCKET_EWOULDBLOCK;
-use const SOL_SOCKET;
-use const SOL_UDP;
 
+/**
+ * Answers LAN discovery requests and exchanges offers, answers and trickled candidates with peers over UDP.
+ */
 final class LanSignaling implements Signaling{
 
 	public const DEFAULT_PORT = 7551;
 
-	/**
-	 * Maximum number of datagrams to drain from the socket per tick.
-	 */
 	public const MAX_DATAGRAMS_PER_TICK = 256;
 
 	public const DEFAULT_MAX_CONNECTIONS = 64;
 
-	private const MAX_DATAGRAM_SIZE = 65535;
-
 	private const PING_DATA = "Ping";
 
-	private ?\Socket $socket = null;
+	private ?DatagramSocket $socket = null;
 
 	/**
 	 * @var PendingConnection[]
@@ -88,7 +67,8 @@ final class LanSignaling implements Signaling{
 	private \Logger $logger;
 
 	/**
-	 * @param int $networkId 64-bit unsigned integer identifying this host on the network.
+	 * @param int $networkId 64-bit unsigned integer identifying this host on the network. PHP has no such type, so
+	 *                       IDs above the signed range are passed as the negative integer with the same bits.
 	 */
 	public function __construct(
 		private readonly ServerInfoProvider $infoProvider,
@@ -96,8 +76,8 @@ final class LanSignaling implements Signaling{
 		private readonly InternetAddress $bindAddress = new InternetAddress("0.0.0.0", self::DEFAULT_PORT, 4),
 		private readonly int $maxConnections = self::DEFAULT_MAX_CONNECTIONS
 	){
-		if($networkId <= 0){
-			throw new \InvalidArgumentException("Network id must be positive, got $networkId");
+		if($networkId === 0){
+			throw new \InvalidArgumentException("Network id must not be zero");
 		}
 		if($maxConnections < 1){
 			throw new \InvalidArgumentException("Maximum connections must be positive, got $maxConnections");
@@ -106,36 +86,30 @@ final class LanSignaling implements Signaling{
 
 	public function getNetworkId() : int{ return $this->networkId; }
 
+	/**
+	 * Returns the address the transport is listening on, with the port the system chose if none was configured.
+	 *
+	 * @throws \LogicException if the transport is not started
+	 */
+	public function getBoundAddress() : InternetAddress{
+		return $this->socket?->getBindAddress() ?? throw new \LogicException("LAN signaling is not listening");
+	}
+
 	public function start(SignalingContext $context) : void{
 		$this->state->checkCanStart();
 
-		$ipv6 = $this->bindAddress->version === 6;
-		$socket = @socket_create($ipv6 ? AF_INET6 : AF_INET, SOCK_DGRAM, SOL_UDP);
-		if($socket === false){
-			throw new SignalingException("Could not create a UDP socket: " . self::lastError(null));
+		try{
+			$this->socket = new DatagramSocket($this->bindAddress, broadcast: true);
+		}catch(SocketException $e){
+			throw new SignalingException($e->getMessage(), $e->getCode(), $e);
 		}
 
-		@socket_set_option($socket, SOL_SOCKET, SO_BROADCAST, 1);
-		@socket_set_option($socket, SOL_SOCKET, SO_REUSEADDR, 1);
-		if($ipv6){
-			@socket_set_option($socket, IPPROTO_IPV6, IPV6_V6ONLY, 1);
-		}
-
-		if(!@socket_bind($socket, $this->bindAddress->ip, $this->bindAddress->port)){
-			$error = self::lastError($socket);
-			socket_close($socket);
-
-			throw new SignalingException("Could not bind to $this->bindAddress: $error");
-		}
-
-		socket_set_nonblock($socket);
-		$this->socket = $socket;
 		$this->negotiator = $context->negotiator;
 		$this->blockList = $context->blockList;
 		$this->logger = new \PrefixedLogger($context->logger, "LAN signaling");
 		$this->state = SignalingState::STARTED;
 
-		$this->logger->debug("LAN discovery listening on $this->bindAddress as network id $this->networkId");
+		$this->logger->debug("Listening on " . $this->socket->getBindAddress() . " as network id " . self::formatId($this->networkId));
 	}
 
 	public function tick(float $now) : void{
@@ -155,78 +129,68 @@ final class LanSignaling implements Signaling{
 		$this->state = SignalingState::SHUT_DOWN;
 
 		foreach($this->connections as $connection){
-			$connection->negotiation->fail("LAN discovery is shutting down", ErrorCode::NO_SIGNALING_CHANNEL);
+			$connection->negotiation->fail("LAN signaling is shutting down", ErrorCode::NO_SIGNALING_CHANNEL);
 		}
 		$this->connections = [];
 
-		if($this->socket !== null){
-			socket_close($this->socket);
-			$this->socket = null;
-		}
+		$this->socket?->close();
+		$this->socket = null;
 	}
 
-	private function receiveAll(\Socket $socket) : void{
+	private function receiveAll(DatagramSocket $socket) : void{
 		for($i = 0; $i < self::MAX_DATAGRAMS_PER_TICK; ++$i){
-			$buffer = "";
-			$from = "";
-			$fromPort = 0;
-
-			if(@socket_recvfrom($socket, $buffer, self::MAX_DATAGRAM_SIZE, 0, $from, $fromPort) === false){
-				$error = socket_last_error($socket);
-				socket_clear_error($socket);
-
-				if($error === SOCKET_EWOULDBLOCK || $error === 0){
-					return;
-				}
-				if($error === SOCKET_ECONNRESET){
-					continue;
-				}
-
-				$this->logger->warning("LAN discovery read failed: " . socket_strerror($error));
+			try{
+				$received = $socket->receive();
+			}catch(SocketException $e){
+				$this->logger->warning($e->getMessage());
 
 				return;
 			}
+			if($received === null){
+				return;
+			}
 
-			if($this->blockList->isBlocked($from)){
+			[$datagram, $address] = $received;
+			if($this->blockList->isBlocked($address->ip)){
 				continue;
 			}
 
-			$address = new InternetAddress($from, $fromPort, $this->bindAddress->version);
 			try{
-				$this->handleDatagram($buffer, $address);
-			}catch(DiscoveryException $e){
+				$this->handleDatagram($datagram, $address);
+			}catch(SignalingException $e){
 				$this->logger->debug("Ignoring a datagram from $address: " . $e->getMessage());
 			}
 		}
 	}
 
 	/**
-	 * @throws DiscoveryException
+	 * @throws SignalingException
 	 */
-	private function handleDatagram(string $frame, InternetAddress $address) : void{
-		[$packet, $senderId] = PacketSerializer::decode($frame);
+	private function handleDatagram(string $datagram, InternetAddress $address) : void{
+		$packet = PacketSerializer::decode($datagram);
 
-		if($senderId === $this->networkId){
+		/* Broadcasts come straight back to the socket that sent them. */
+		if($packet->senderId === $this->networkId){
 			return;
 		}
 
 		if($packet instanceof RequestPacket){
 			$info = $this->infoProvider->getServerInfo();
 			if($info !== null){
-				$this->send(new ResponsePacket(ServerInfoCodec::encode($info)), $address);
+				$this->send(new ResponsePacket($this->networkId, ServerInfoCodec::encode($info)), $address);
 			}
 
 			return;
 		}
 		if($packet instanceof MessagePacket){
-			$this->handleMessage($packet, $senderId, $address);
+			$this->handleMessage($packet, $address);
 		}
 	}
 
 	/**
-	 * @throws DiscoveryException
+	 * @throws SignalingException
 	 */
-	private function handleMessage(MessagePacket $packet, int $senderId, InternetAddress $address) : void{
+	private function handleMessage(MessagePacket $packet, InternetAddress $address) : void{
 		if($packet->recipientId !== $this->networkId){
 			return;
 		}
@@ -235,7 +199,8 @@ final class LanSignaling implements Signaling{
 		}
 
 		$signal = Signal::parse($packet->data);
-		$key = self::keyFor($senderId, $signal->connectionId);
+		$senderId = $packet->senderId;
+		$key = $senderId . "/" . $signal->connectionId;
 
 		match($signal->type){
 			SignalType::CONNECT_REQUEST => $this->handleOffer($signal, $senderId, $key, $address),
@@ -250,21 +215,17 @@ final class LanSignaling implements Signaling{
 			return;
 		}
 		if(count($this->connections) >= $this->maxConnections){
-			$this->logger->debug("Refused offer from $senderId: connection limit of $this->maxConnections reached");
-			$this->sendSignal($senderId, new Signal(SignalType::CONNECT_ERROR, $signal->connectionId, (string) ErrorCode::GENERIC_FAILURE->value), $address);
+			$this->logger->debug("Refused an offer from " . self::formatId($senderId) . ": connection limit of $this->maxConnections reached");
+			$this->sendSignal($senderId, Signal::error($signal->connectionId, ErrorCode::GENERIC_FAILURE), $address);
 
 			return;
 		}
 
 		try{
-			$negotiation = $this->negotiator->beginNegotiation(
-				$signal->data,
-				sprintf("%u", $senderId),
-				CandidateMode::TRICKLE
-			);
+			$negotiation = $this->negotiator->beginNegotiation($signal->data, self::formatId($senderId), CandidateMode::TRICKLE);
 		}catch(NegotiationException $e){
-			$this->logger->debug("Refused an offer from $senderId: " . $e->getMessage());
-			$this->sendSignal($senderId, new Signal(SignalType::CONNECT_ERROR, $signal->connectionId, (string) $e->getErrorCode()->value), $address);
+			$this->logger->debug("Refused an offer from " . self::formatId($senderId) . ": " . $e->getMessage());
+			$this->sendSignal($senderId, Signal::error($signal->connectionId, $e->getErrorCode()), $address);
 
 			return;
 		}
@@ -287,62 +248,39 @@ final class LanSignaling implements Signaling{
 
 	private function handlePeerError(Signal $signal, string $key) : void{
 		$connection = $this->connections[$key] ?? null;
-		$connection?->negotiation->fail("Peer reported error code " . $signal->data, ErrorCode::GENERIC_FAILURE);
+		if($connection === null){
+			return;
+		}
+
+		/* The peer already knows the connection failed, so it is dropped here rather than reported back. */
+		unset($this->connections[$key]);
+		$connection->negotiation->fail("Peer reported error code " . $signal->data, ErrorCode::GENERIC_FAILURE);
 	}
 
 	private function processConnections() : void{
 		foreach($this->connections as $key => $connection){
-			$negotiation = $connection->negotiation;
-
-			if($negotiation->isFailed()){
-				$this->sendSignal($connection->peerId, new Signal(
-					SignalType::CONNECT_ERROR,
-					$connection->connectionId,
-					(string) $negotiation->getFailureCode()->value
-				), $connection->address);
-				unset($this->connections[$key]);
-				continue;
+			foreach($connection->takeSignals() as $signal){
+				$this->sendSignal($connection->peerId, $signal, $connection->address);
 			}
-
-			$answer = $negotiation->getAnswer();
-			if($answer !== null && !$connection->answerSent){
-				$this->sendSignal($connection->peerId, new Signal(SignalType::CONNECT_RESPONSE, $connection->connectionId, $answer), $connection->address);
-				$connection->answerSent = true;
-			}
-
-			if($connection->answerSent){
-				foreach($negotiation->takeLocalCandidates() as $candidate){
-					$this->sendSignal($connection->peerId, new Signal(SignalType::CANDIDATE_ADD, $connection->connectionId, $candidate), $connection->address);
-				}
-			}
-
-			if($negotiation->isFinished()){
+			if($connection->negotiation->isFinished()){
 				unset($this->connections[$key]);
 			}
 		}
 	}
 
 	private function sendSignal(int $peerId, Signal $signal, InternetAddress $address) : void{
-		$this->send(new MessagePacket($peerId, $signal->toString()), $address);
+		$this->send(new MessagePacket($this->networkId, $peerId, $signal->toString()), $address);
 	}
 
 	private function send(Packet $packet, InternetAddress $address) : void{
-		$socket = $this->socket;
-		if($socket === null){
-			return;
-		}
-
-		$frame = PacketSerializer::encode($packet, $this->networkId);
-		if(@socket_sendto($socket, $frame, strlen($frame), 0, $address->ip, $address->port) === false){
-			$this->logger->debug("Failed to send to $address: " . socket_strerror(socket_last_error($socket)));
+		try{
+			$this->socket?->send(PacketSerializer::encode($packet), $address);
+		}catch(SocketException|DiscoveryException $e){
+			$this->logger->debug("Could not send to $address: " . $e->getMessage());
 		}
 	}
 
-	private static function keyFor(int $senderId, string $connectionId) : string{
-		return $senderId . "/" . $connectionId;
-	}
-
-	private static function lastError(?\Socket $socket) : string{
-		return socket_strerror($socket === null ? socket_last_error() : socket_last_error($socket));
+	private static function formatId(int $networkId) : string{
+		return sprintf("%u", $networkId);
 	}
 }

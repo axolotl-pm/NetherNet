@@ -94,30 +94,11 @@ final class HttpSignalingTlsTest extends TestCase{
 		return $path;
 	}
 
-	/**
-	 * @param array<string, mixed> $tlsContext
-	 */
-	private function start(array $tlsContext, RecordingLogger $logger) : int{
-		for($attempt = 0; $attempt < 25; ++$attempt){
-			$port = random_int(20000, 60000);
-			$signaling = new HttpSignaling(new InternetAddress("127.0.0.1", $port, 4), $tlsContext);
+	private function start(string $certificateFile, RecordingLogger $logger) : int{
+		$this->signaling = new HttpSignaling(new InternetAddress("127.0.0.1", 0, 4), new TlsConfiguration($certificateFile));
+		$this->signaling->start(TestSignalingContext::create(new FakeNegotiator("answer-sdp"), $logger));
 
-			try{
-				$signaling->start(TestSignalingContext::create(new FakeNegotiator("answer-sdp"), $logger));
-			}catch(SignalingException $e){
-				//a reserved port range is not what this test is about
-				if(!str_contains($e->getMessage(), "Failed to listen")){
-					throw $e;
-				}
-				continue;
-			}
-
-			$this->signaling = $signaling;
-
-			return $port;
-		}
-
-		self::fail("Could not find a free port to listen on");
+		return $this->signaling->getBoundAddress()->port;
 	}
 
 	/**
@@ -163,8 +144,8 @@ final class HttpSignalingTlsTest extends TestCase{
 	 */
 	public function testUnreadableCertificateIsRefusedAtStartup() : void{
 		$signaling = new HttpSignaling(
-			new InternetAddress("127.0.0.1", random_int(20000, 60000), 4),
-			["local_cert" => sys_get_temp_dir() . DIRECTORY_SEPARATOR . "definitely-not-here.pem"]
+			new InternetAddress("127.0.0.1", 0, 4),
+			new TlsConfiguration(sys_get_temp_dir() . DIRECTORY_SEPARATOR . "definitely-not-here.pem")
 		);
 
 		$this->expectException(SignalingException::class);
@@ -178,7 +159,7 @@ final class HttpSignalingTlsTest extends TestCase{
 	 */
 	public function testHandshakeFailureReportsWhyRatherThanNothing() : void{
 		$logger = new RecordingLogger();
-		$port = $this->start(["local_cert" => $this->tempFile("garbage", "this is not a certificate\n")], $logger);
+		$port = $this->start($this->tempFile("garbage", "this is not a certificate\n"), $logger);
 
 		//a real ClientHello, so the listener commits to a handshake rather than
 		//treating this as a plaintext peer to redirect
@@ -214,7 +195,7 @@ final class HttpSignalingTlsTest extends TestCase{
 	 */
 	public function testPlaintextOfferIsRedirectedPreservingTheMethod() : void{
 		$logger = new RecordingLogger();
-		$port = $this->start(["local_cert" => $this->certificate()], $logger);
+		$port = $this->start($this->certificate(), $logger);
 
 		$response = $this->exchange($port, [
 			"POST /v1/join/77?x=1 HTTP/1.1",
@@ -235,7 +216,7 @@ final class HttpSignalingTlsTest extends TestCase{
 	 */
 	public function testPlaintextProbeIsRedirectedToo() : void{
 		$logger = new RecordingLogger();
-		$port = $this->start(["local_cert" => $this->certificate()], $logger);
+		$port = $this->start($this->certificate(), $logger);
 
 		$response = $this->exchange($port, ["GET /v1/join HTTP/1.1", "Host: 127.0.0.1:$port"]);
 
@@ -246,7 +227,7 @@ final class HttpSignalingTlsTest extends TestCase{
 	/** A peer that really does speak TLS still gets a handshake, not a redirect. */
 	public function testTlsClientStillNegotiates() : void{
 		$logger = new RecordingLogger();
-		$port = $this->start(["local_cert" => $this->certificate()], $logger);
+		$port = $this->start($this->certificate(), $logger);
 
 		$client = $this->connect($port, tls: true);
 
@@ -268,7 +249,7 @@ final class HttpSignalingTlsTest extends TestCase{
 	 */
 	public function testRequestOverTls13IsAnswered() : void{
 		$logger = new RecordingLogger();
-		$port = $this->start(["local_cert" => $this->certificate()], $logger);
+		$port = $this->start($this->certificate(), $logger);
 
 		$client = $this->connect($port, tls: true);
 

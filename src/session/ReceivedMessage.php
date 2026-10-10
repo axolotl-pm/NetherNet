@@ -16,6 +16,9 @@ namespace pocketmine\nethernet\session;
 
 use pocketmine\nethernet\protocol\Reliability;
 
+/**
+ * @internal
+ */
 final class ReceivedMessage{
 
 	public function __construct(

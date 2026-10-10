@@ -16,10 +16,10 @@ namespace pocketmine\nethernet\signaling\http;
 
 use function array_reverse;
 use function count;
+use function ctype_digit;
 use function explode;
 use function filter_var;
 use function inet_pton;
-use function is_numeric;
 use function ord;
 use function preg_match;
 use function str_contains;
@@ -37,13 +37,12 @@ final class ReverseProxy{
 	public const HEADER_REAL_IP = "X-Real-IP";
 	public const HEADER_CF_CONNECTING_IP = "CF-Connecting-IP";
 
-	/**
-	 * @var array<int, array{string, int}>
-	 * @phpstan-var list<array{string, int}>
-	 */
+	/** @phpstan-var list<array{string, int}> packed address and prefix length */
 	private array $networks = [];
 
 	/**
+	 * @param string[] $headers  Headers to read the client address from, in order of preference.
+	 * @param string[] $networks Addresses or CIDR blocks of the proxies to trust; any peer is trusted if none are given.
 	 * @phpstan-param list<string> $headers
 	 * @phpstan-param list<string> $networks
 	 *
@@ -82,9 +81,6 @@ final class ReverseProxy{
 		return new self([self::HEADER_CF_CONNECTING_IP, self::HEADER_FORWARDED_FOR], $networks);
 	}
 
-	/**
-	 * Returns whether the given peer address is a trusted proxy.
-	 */
 	public function trusts(string $address) : bool{
 		if(count($this->networks) === 0){
 			return true;
@@ -166,7 +162,7 @@ final class ReverseProxy{
 		$prefix = null;
 		if(str_contains($network, "/")){
 			[$address, $prefixString] = explode("/", $network, 2);
-			if(!is_numeric($prefixString)){
+			if(!ctype_digit($prefixString)){
 				throw new \InvalidArgumentException("Network \"$network\" has a non-numeric CIDR prefix length");
 			}
 			$prefix = (int) $prefixString;
@@ -179,7 +175,7 @@ final class ReverseProxy{
 
 		$bits = strlen($packed) * 8;
 		$prefix ??= $bits;
-		if($prefix < 0 || $prefix > $bits){
+		if($prefix > $bits){
 			throw new \InvalidArgumentException("Network \"$network\" prefix length must be between 0 and $bits");
 		}
 

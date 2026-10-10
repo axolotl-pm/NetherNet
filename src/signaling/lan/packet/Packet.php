@@ -14,19 +14,18 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\lan\packet;
 
-use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
-use pmmp\encoding\DataDecodeException;
 
 abstract class Packet{
 
-	abstract public function getType() : PacketType;
-
 	/**
-	 * @throws DataDecodeException
-	 * @throws \pocketmine\nethernet\signaling\lan\DiscoveryException
+	 * @param int $senderId 64-bit unsigned NetworkID of the host the packet comes from.
 	 */
-	abstract public function decodeBody(ByteBufferReader $in) : void;
+	public function __construct(
+		public readonly int $senderId
+	){}
+
+	abstract public function getType() : PacketType;
 
 	abstract public function encodeBody(ByteBufferWriter $out) : void;
 }

@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling;
 
+use pocketmine\nethernet\protocol\ErrorCode;
 use function explode;
 
 final class Signal{
@@ -39,6 +40,10 @@ final class Signal{
 		}
 
 		return new self($type, $parts[1], $parts[2]);
+	}
+
+	public static function error(string $connectionId, ErrorCode $code) : self{
+		return new self(SignalType::CONNECT_ERROR, $connectionId, (string) $code->value);
 	}
 
 	public function toString() : string{

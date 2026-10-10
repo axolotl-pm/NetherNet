@@ -30,7 +30,8 @@ use function min;
  */
 final class SessionManager{
 
-	public const DEFAULT_PACKETS_PER_TICK_LIMIT = 64;
+	/** Packets read from each session per tick, so that one busy client cannot hold up everyone else's. */
+	public const PACKETS_PER_TICK_LIMIT = 64;
 
 	/** Seconds between bandwidth reports and ping checks. */
 	public const STATS_INTERVAL = 1.0;
@@ -42,8 +43,6 @@ final class SessionManager{
 	private array $sessions = [];
 
 	private int $nextSessionId = 0;
-
-	private int $packetsPerTickLimit = self::DEFAULT_PACKETS_PER_TICK_LIMIT;
 
 	private readonly Segmenter $segmenter;
 
@@ -59,38 +58,32 @@ final class SessionManager{
 		$this->segmenter = new Segmenter($budget->maxMessageSize - Segmenter::HEADER_SIZE);
 	}
 
-	public function setPacketsPerTickLimit(int $limit) : void{
-		if($limit < 1){
-			throw new \InvalidArgumentException("Packets per tick limit must be positive, got $limit");
-		}
-		$this->packetsPerTickLimit = $limit;
-	}
-
 	public function open(EstablishedPeer $peer) : Session{
 		$session = new Session(
 			$this->nextSessionId++,
 			$peer->transport,
 			$peer->channels,
-			$peer->networkId,
 			$peer->address,
-			$peer->identity,
+			$peer->clientAddress,
 			$this->segmenterFor($peer->channels),
 			$this->budget
 		);
 		$id = $session->getId();
 
-		$this->logger->debug("Session $id opened for network id $peer->networkId from $peer->address");
+		$this->logger->debug("Session $id opened for network id $peer->networkId from $peer->address" . ($peer->clientAddress !== null ? " (client $peer->clientAddress)" : ""));
+
+		/* Registered first, so that the listener can already close or block the session it is being told about. */
+		$this->sessions[$id] = $session;
 
 		try{
-			$this->listener->onSessionOpen($id, $peer->networkId, $peer->address, $peer->identity);
+			$this->listener->onSessionOpen($id, $peer->networkId, $peer->address, $peer->clientAddress, $peer->identity);
 		}catch(\Throwable $e){
 			/* The listener never took the session on, so there is nothing to tell it about the session ending. */
+			unset($this->sessions[$id]);
 			$session->forciblyDisconnect(DisconnectReason::REJECTED_BY_HOST);
 
 			throw $e;
 		}
-
-		$this->sessions[$id] = $session;
 
 		return $session;
 	}
@@ -130,7 +123,7 @@ final class SessionManager{
 
 	private function processIncoming(Session $session) : void{
 		$id = $session->getId();
-		for($i = 0; $i < $this->packetsPerTickLimit; ++$i){
+		for($i = 0; $i < self::PACKETS_PER_TICK_LIMIT; ++$i){
 			if(!$this->listener->canAcceptPackets()){
 				return;
 			}

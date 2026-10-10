@@ -29,6 +29,7 @@ use pocketmine\nethernet\transport\ChannelPair;
 use pocketmine\nethernet\transport\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\transport\TransportState;
 use pocketmine\nethernet\utils\InternetAddress;
+use function str_repeat;
 
 final class NetherNetServerTest extends TestCase{
 
@@ -42,7 +43,8 @@ final class NetherNetServerTest extends TestCase{
 		$this->listener = new RecordingEventListener();
 		$this->server = new NetherNetServer(
 			$this->negotiator,
-			new SessionManager($this->listener, new ConnectionBudgetConfiguration(), $logger),
+			$this->listener,
+			new ConnectionBudgetConfiguration(),
 			$logger
 		);
 	}
@@ -50,13 +52,13 @@ final class NetherNetServerTest extends TestCase{
 	/**
 	 * @phpstan-return array{EstablishedPeer, FakePeerTransport, FakeMessageChannel}
 	 */
-	private static function peer(string $ip = "192.0.2.10", int $version = 4) : array{
+	private static function peer(string $ip = "192.0.2.10", int $version = 4, ?string $clientAddress = null) : array{
 		$transport = new FakePeerTransport();
 		$transport->state = TransportState::CONNECTED;
 		$reliable = new FakeMessageChannel(Reliability::RELIABLE);
 
 		return [
-			new EstablishedPeer($transport, new ChannelPair($reliable, new FakeMessageChannel(Reliability::UNRELIABLE)), "1234", new InternetAddress($ip, 5000, $version), null),
+			new EstablishedPeer($transport, new ChannelPair($reliable, new FakeMessageChannel(Reliability::UNRELIABLE)), "1234", new InternetAddress($ip, 5000, $version), $clientAddress, null),
 			$transport,
 			$reliable
 		];
@@ -155,7 +157,20 @@ final class NetherNetServerTest extends TestCase{
 		$this->server->tick(1.1);
 
 		self::assertSame([[$blockedId, DisconnectReason::ADDRESS_BLOCKED]], $this->listener->closed);
-		self::assertSame(1, $this->server->getSessionCount());
+	}
+
+	public function testBlockingAnAddressDisconnectsTheSessionsSignaledFromIt() : void{
+		$this->server->start();
+		[$blocked] = self::peer(clientAddress: "203.0.113.7");
+		[$other] = self::peer(clientAddress: "203.0.113.8");
+		$this->negotiator->established = [$blocked, $other];
+		$this->server->tick(1.0);
+		$blockedId = $this->listener->opened[0][0];
+
+		$this->server->blockAddress("203.0.113.7");
+		$this->server->tick(1.1);
+
+		self::assertSame([[$blockedId, DisconnectReason::ADDRESS_BLOCKED]], $this->listener->closed);
 	}
 
 	public function testGracefulShutdownStopsAcceptingAtOnceAndLetsSessionsFlush() : void{
@@ -213,6 +228,50 @@ final class NetherNetServerTest extends TestCase{
 		self::assertSame([[$sessionId, DisconnectReason::SEND_FAILED]], $this->listener->closed);
 	}
 
+	public function testReliablePacketTooLargeToSendClosesTheSession() : void{
+		$this->server->start();
+		[$peer, , $reliable] = self::peer();
+		$reliable->maxMessageSize = 3;
+		$this->negotiator->established[] = $peer;
+		$this->server->tick(1.0);
+		$sessionId = $this->listener->opened[0][0];
+
+		$this->server->sendPacket($sessionId, str_repeat("x", 1024));
+		$this->server->tick(1.1);
+
+		self::assertSame([], $reliable->sent);
+		self::assertSame([[$sessionId, DisconnectReason::SEND_FAILED]], $this->listener->closed);
+	}
+
+	public function testUnreliablePacketTooLargeToSendIsOnlyLost() : void{
+		$this->server->start();
+		[$peer, , $reliable] = self::peer();
+		$reliable->maxMessageSize = 3;
+		$this->negotiator->established[] = $peer;
+		$this->server->tick(1.0);
+		$sessionId = $this->listener->opened[0][0];
+
+		$this->server->sendPacket($sessionId, "too long for one segment", Reliability::UNRELIABLE);
+		$this->server->tick(1.1);
+
+		self::assertSame([], $this->listener->closed);
+	}
+
+	public function testListenerCanTurnASessionAwayAsItOpens() : void{
+		$this->server->start();
+		[$peer, $transport, $reliable] = self::peer();
+		$reliable->incoming = ["\x00hello"];
+		$this->negotiator->established[] = $peer;
+		$this->listener->onOpen = fn(int $sessionId) => $this->server->closeSession($sessionId, DisconnectReason::REJECTED_BY_HOST);
+
+		$this->server->tick(1.0);
+
+		self::assertCount(1, $this->listener->opened);
+		self::assertSame([[$this->listener->opened[0][0], DisconnectReason::REJECTED_BY_HOST]], $this->listener->closed);
+		self::assertSame([], $this->listener->packets);
+		self::assertTrue($transport->closed);
+	}
+
 	/**
 	 * A listener that throws ends the tick, and the peers it had not been shown yet would otherwise stay
 	 * connected with nothing ever reading from them.
@@ -230,7 +289,6 @@ final class NetherNetServerTest extends TestCase{
 		}catch(\RuntimeException){
 			self::assertTrue($firstTransport->closed);
 			self::assertTrue($secondTransport->closed);
-			self::assertSame(0, $this->server->getSessionCount());
 		}
 	}
 

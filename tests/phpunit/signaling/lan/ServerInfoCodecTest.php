@@ -17,6 +17,7 @@ namespace pocketmine\nethernet\signaling\lan;
 use PHPUnit\Framework\TestCase;
 use pocketmine\nethernet\info\GameType;
 use pocketmine\nethernet\info\ServerInfo;
+use pocketmine\nethernet\signaling\lan\packet\DiscoveryException;
 use function bin2hex;
 use function chr;
 use function count;

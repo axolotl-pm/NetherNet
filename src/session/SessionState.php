@@ -14,6 +14,9 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\session;
 
+/**
+ * @internal
+ */
 enum SessionState{
 	case CONNECTED;
 	case DISCONNECT_PENDING;

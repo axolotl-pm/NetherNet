@@ -49,7 +49,7 @@ final class SessionManagerTest extends TestCase{
 		$unreliable = new FakeMessageChannel(Reliability::UNRELIABLE);
 
 		return [
-			new EstablishedPeer($transport, new ChannelPair($reliable, $unreliable), $networkId, new InternetAddress("192.0.2.10", 5000, 4), null),
+			new EstablishedPeer($transport, new ChannelPair($reliable, $unreliable), $networkId, new InternetAddress("192.0.2.10", 5000, 4), null, null),
 			$transport,
 			$reliable,
 			$unreliable
@@ -65,7 +65,7 @@ final class SessionManagerTest extends TestCase{
 
 		self::assertNotSame($a->getId(), $b->getId());
 		self::assertCount(2, $this->listener->opened);
-		[$id, $networkId, $address, $identity] = $this->listener->opened[0];
+		[$id, $networkId, $address, , $identity] = $this->listener->opened[0];
 		self::assertSame($a->getId(), $id);
 		self::assertSame("1111", $networkId);
 		self::assertSame("192.0.2.10:5000", $address->toString());
@@ -95,19 +95,13 @@ final class SessionManagerTest extends TestCase{
 	public function testDeliveriesPerTickAreCapped() : void{
 		[$peer, , $reliable] = self::peer();
 		$this->manager->open($peer);
-		$this->manager->setPacketsPerTickLimit(8);
-		$reliable->incoming = array_fill(0, 11, "\x00x");
+		$reliable->incoming = array_fill(0, SessionManager::PACKETS_PER_TICK_LIMIT + 3, "\x00x");
 
 		$this->manager->tick(1.0);
-		self::assertCount(8, $this->listener->packets);
+		self::assertCount(SessionManager::PACKETS_PER_TICK_LIMIT, $this->listener->packets);
 
 		$this->manager->tick(1.1);
-		self::assertCount(11, $this->listener->packets);
-	}
-
-	public function testPacketsPerTickLimitMustBePositive() : void{
-		$this->expectException(\InvalidArgumentException::class);
-		$this->manager->setPacketsPerTickLimit(0);
+		self::assertCount(SessionManager::PACKETS_PER_TICK_LIMIT + 3, $this->listener->packets);
 	}
 
 	public function testNothingIsReadWhileTheListenerCannotTakeMore() : void{

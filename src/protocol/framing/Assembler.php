@@ -19,6 +19,7 @@ use function strlen;
 use function substr;
 
 /**
+ * @internal
  * Reassembles fragmented data channel messages using NetherNet 1-byte countdown framing headers.
  */
 final class Assembler{
@@ -28,9 +29,6 @@ final class Assembler{
 	/** Remaining fragments expected for the current message sequence (0 = unfragmented/complete or awaiting start). */
 	private int $remaining = 0;
 
-	/**
-	 * @param bool $fragmentationAllowed Whether message fragmentation is permitted on this data channel.
-	 */
 	public function __construct(
 		private readonly bool $fragmentationAllowed,
 		private readonly int $maxPayloadSize = Segmenter::MAX_PAYLOAD_SIZE
@@ -40,9 +38,7 @@ final class Assembler{
 		}
 	}
 
-	public function isAssembling() : bool{ return $this->remaining > 0; }
-
-	public function reset() : void{
+	private function reset() : void{
 		$this->buffer = "";
 		$this->remaining = 0;
 	}

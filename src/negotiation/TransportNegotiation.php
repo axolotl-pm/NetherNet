@@ -47,6 +47,7 @@ final class TransportNegotiation implements Negotiation{
 	public function __construct(
 		private readonly PeerTransport $transport,
 		private readonly string $networkId,
+		private readonly ?string $clientAddress,
 		private readonly ?PeerIdentity $identity,
 		private readonly CandidateMode $candidateMode,
 		private readonly AnswerBuilder $answerBuilder,
@@ -227,7 +228,7 @@ final class TransportNegotiation implements Negotiation{
 			return;
 		}
 
-		$this->establishedPeer = new EstablishedPeer($this->transport, new ChannelPair($reliable, $unreliable), $this->networkId, $address, $this->identity);
+		$this->establishedPeer = new EstablishedPeer($this->transport, new ChannelPair($reliable, $unreliable), $this->networkId, $address, $this->clientAddress, $this->identity);
 		$this->enter(NegotiationState::ESTABLISHED);
 	}
 

@@ -21,7 +21,6 @@ use pocketmine\nethernet\info\ServerInfo;
 use pocketmine\nethernet\info\ServerInfoProvider;
 use pocketmine\nethernet\negotiation\CandidateMode;
 use pocketmine\nethernet\negotiation\Negotiator;
-use pocketmine\nethernet\signaling\SignalingException;
 use pocketmine\nethernet\TestSignalingContext;
 use pocketmine\nethernet\utils\InternetAddress;
 use function fclose;
@@ -30,7 +29,6 @@ use function fread;
 use function fwrite;
 use function microtime;
 use function preg_match;
-use function random_int;
 use function str_contains;
 use function stream_set_blocking;
 use function stream_socket_client;
@@ -66,24 +64,10 @@ final class HttpSignalingTest extends TestCase{
 		$this->signaling?->shutdown();
 	}
 
-	private function start(Negotiator $negotiator, ?ServerInfoProvider $infoProvider = null, ?ReverseProxy $reverseProxy = null) : void{
-		for($attempt = 0; $attempt < 20; ++$attempt){
-			$port = random_int(20000, 60000);
-			$signaling = new HttpSignaling(new InternetAddress("127.0.0.1", $port, 4), infoProvider: $infoProvider, reverseProxy: $reverseProxy);
-
-			try{
-				$signaling->start(TestSignalingContext::create($negotiator));
-			}catch(SignalingException){
-				continue;
-			}
-
-			$this->signaling = $signaling;
-			$this->port = $port;
-
-			return;
-		}
-
-		self::fail("Could not find a free port to listen on");
+	private function start(Negotiator $negotiator, ?ServerInfoProvider $infoProvider = null, ?ReverseProxy $reverseProxy = null, int $maxConnections = HttpSignaling::DEFAULT_MAX_CONNECTIONS) : void{
+		$this->signaling = new HttpSignaling(new InternetAddress("127.0.0.1", 0, 4), infoProvider: $infoProvider, reverseProxy: $reverseProxy, maxConnections: $maxConnections);
+		$this->signaling->start(TestSignalingContext::create($negotiator));
+		$this->port = $this->signaling->getBoundAddress()->port;
 	}
 
 	/**
@@ -145,7 +129,7 @@ final class HttpSignalingTest extends TestCase{
 
 		self::assertStringStartsWith("HTTP/1.1 200 OK\r\n", $response);
 		self::assertStringContainsString("Content-Type: application/json\r\n", $response);
-		self::assertStringEndsWith("\r\n\r\n" . ServerInfoJson::encode($status), $response);
+		self::assertStringEndsWith('"name":"Dedicated Server","protocol":800,"version":"1.21.100","level":"Bedrock level","players":3,"maxPlayers":20,"gameType":0}', $response);
 	}
 
 	/**
@@ -285,6 +269,69 @@ final class HttpSignalingTest extends TestCase{
 
 		self::assertSame(1, preg_match('#^HTTP/1\.1 200 #', $firstResponse));
 		self::assertSame(1, preg_match('#^HTTP/1\.1 200 #', $secondResponse));
+	}
+
+	/**
+	 * @param resource $client
+	 */
+	private static function isClosedByTheServer(mixed $client) : bool{
+		for($attempt = 0; $attempt < 100; ++$attempt){
+			fread($client, 1);
+			if(feof($client)){
+				return true;
+			}
+			usleep(1000);
+		}
+
+		return false;
+	}
+
+	/**
+	 * Clients that connect and then say nothing must not be able to keep everyone else out, so the one that
+	 * has been silent longest gives up its place.
+	 */
+	public function testFullListenerEvictsTheClientThatHasWaitedLongest() : void{
+		$this->start(new FakeNegotiator("answer-sdp"), maxConnections: 2);
+
+		$oldest = $this->connect();
+		$this->signaling?->tick(1.0);
+		$newer = $this->connect();
+		$this->signaling?->tick(2.0);
+		$latest = $this->connect();
+		$this->signaling?->tick(3.0);
+
+		self::assertTrue(self::isClosedByTheServer($oldest), "the longest-waiting client kept its place");
+
+		fwrite($newer, "GET /v1/join HTTP/1.1\r\nHost: h\r\n\r\n");
+		fwrite($latest, "GET /v1/join HTTP/1.1\r\nHost: h\r\n\r\n");
+		$this->signaling?->tick(3.1);
+		self::assertStringStartsWith("HTTP/1.1 200 ", (string) fread($newer, 1024));
+		self::assertStringStartsWith("HTTP/1.1 200 ", (string) fread($latest, 1024));
+	}
+
+	/**
+	 * A client whose offer is already being worked on is not the one holding things up, and cutting it off
+	 * would throw that work away.
+	 */
+	public function testFullListenerTurnsNewClientsAwayRatherThanDropRequestsInProgress() : void{
+		$this->start(new FakeNegotiator(null), maxConnections: 1);
+
+		$busy = $this->connect();
+		fwrite($busy, "POST /v1/join/1 HTTP/1.1\r\nHost: h\r\nContent-Type: application/sdp\r\nContent-Length: 5\r\n\r\noffer");
+		$this->signaling?->tick(1.0);
+
+		$late = $this->connect();
+		$this->signaling?->tick(2.0);
+
+		self::assertTrue(self::isClosedByTheServer($late));
+		self::assertFalse(feof($busy));
+	}
+
+	public function testBoundAddressIsOnlyKnownWhileListening() : void{
+		$signaling = new HttpSignaling(new InternetAddress("127.0.0.1", 0, 4));
+
+		$this->expectException(\LogicException::class);
+		$signaling->getBoundAddress();
 	}
 
 	public function testStartingTwiceIsRefused() : void{

@@ -20,60 +20,21 @@ enum DisconnectReason : int{
 	 * The remote client closed the connection or data channels, or the SCTP association was lost to missed heartbeats.
 	 */
 	case PEER_DISCONNECT = 0;
-
-	/**
-	 * The server closed the session.
-	 */
 	case SERVER_DISCONNECT = 1;
-
-	/**
-	 * The server is shutting down.
-	 */
 	case SERVER_SHUTDOWN = 2;
-
-	/**
-	 * The server rejected the incoming session.
-	 */
 	case REJECTED_BY_HOST = 3;
 
 	/**
 	 * The underlying WebRTC peer connection failed (e.g. ICE consent check timeout).
 	 */
 	case CONNECTION_FAILED = 4;
-
-	/**
-	 * An incoming message could not be parsed or framed.
-	 */
 	case BAD_DATA = 5;
-
-	/**
-	 * An outgoing message failed to send.
-	 */
 	case SEND_FAILED = 6;
-
-	/**
-	 * Incoming unread bytes exceeded the receive queue limit.
-	 */
 	case RECEIVE_QUEUE_TOO_MANY_BYTES = 7;
-
-	/**
-	 * Incoming unread messages exceeded the receive queue limit.
-	 */
 	case RECEIVE_QUEUE_TOO_MANY_MESSAGES = 8;
-
-	/**
-	 * Outgoing unsent bytes exceeded the send queue limit.
-	 */
 	case SEND_QUEUE_TOO_MANY_BYTES = 9;
-
-	/**
-	 * The remote address is blocked by the server.
-	 */
 	case ADDRESS_BLOCKED = 10;
 
-	/**
-	 * Returns a human-readable fallback description for logging.
-	 */
 	public function getMessage() : string{
 		return match($this){
 			self::PEER_DISCONNECT => "client disconnect",

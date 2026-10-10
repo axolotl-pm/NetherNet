@@ -15,21 +15,49 @@ declare(strict_types=1);
 namespace pocketmine\nethernet\signaling\lan;
 
 use pocketmine\nethernet\negotiation\Negotiation;
+use pocketmine\nethernet\signaling\Signal;
+use pocketmine\nethernet\signaling\SignalType;
 use pocketmine\nethernet\utils\InternetAddress;
 
+/**
+ * @internal
+ */
 final class PendingConnection{
 
-	public bool $answerSent = false;
+	private bool $answerSent = false;
 
-	/**
-	 * @param int             $peerId       Remote peer's 64-bit NetworkID.
-	 * @param InternetAddress $address      Source address the offer arrived from.
-	 * @param string          $connectionId Unique identifier for this signaling session.
-	 */
 	public function __construct(
 		public readonly Negotiation $negotiation,
 		public readonly int $peerId,
 		public readonly InternetAddress $address,
 		public readonly string $connectionId
 	){}
+
+	/**
+	 * Takes the signals the peer is now owed.
+	 *
+	 * @return Signal[]
+	 * @phpstan-return list<Signal>
+	 */
+	public function takeSignals() : array{
+		if($this->negotiation->isFailed()){
+			return [Signal::error($this->connectionId, $this->negotiation->getFailureCode())];
+		}
+
+		$signals = [];
+		if(!$this->answerSent){
+			$answer = $this->negotiation->getAnswer();
+			if($answer === null){
+				/* A candidate refers to the answer it belongs to, so none goes out before the answer has. */
+				return [];
+			}
+			$signals[] = new Signal(SignalType::CONNECT_RESPONSE, $this->connectionId, $answer);
+			$this->answerSent = true;
+		}
+		foreach($this->negotiation->takeLocalCandidates() as $candidate){
+			$signals[] = new Signal(SignalType::CANDIDATE_ADD, $this->connectionId, $candidate);
+		}
+
+		return $signals;
+	}
 }

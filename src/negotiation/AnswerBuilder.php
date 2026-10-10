@@ -18,7 +18,6 @@ use pocketmine\nethernet\identity\IdentityException;
 use pocketmine\nethernet\identity\IdentityProvider;
 use pocketmine\nethernet\sdp\SdpException;
 use pocketmine\nethernet\sdp\SessionDescription;
-use pocketmine\nethernet\utils\InternetAddress;
 
 /**
  * @internal
@@ -32,13 +31,7 @@ final class AnswerBuilder{
 	public function __construct(
 		private readonly IdentityProvider $identityProvider,
 		private readonly ?array $advertisedAddresses = null
-	){
-		foreach($advertisedAddresses ?? [] as $address){
-			if(InternetAddress::normalizeIp($address) === null){
-				throw new \InvalidArgumentException("Advertised address \"$address\" is not an IP address");
-			}
-		}
-	}
+	){}
 
 	/**
 	 * @throws SdpException

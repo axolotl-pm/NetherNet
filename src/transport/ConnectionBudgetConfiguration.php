@@ -21,41 +21,22 @@ use pocketmine\nethernet\protocol\framing\Segmenter;
  */
 final class ConnectionBudgetConfiguration{
 
-	/**
-	 * Default maximum SCTP message size advertised in SDP answers (`a=max-message-size`).
-	 */
+	/** Advertised in SDP answers as `a=max-message-size`. */
 	public const DEFAULT_MAX_MESSAGE_SIZE = Segmenter::MAX_SEGMENT_PAYLOAD_SIZE + Segmenter::HEADER_SIZE;
 
-	/**
-	 * Default maximum reassembled message payload size in bytes.
-	 */
 	public const DEFAULT_MAX_PAYLOAD_SIZE = 262144;
 
-	/**
-	 * Default maximum unread incoming bytes before dropping a session.
-	 */
 	public const DEFAULT_MAX_RECEIVE_QUEUE_SIZE = 262144;
 
-	/**
-	 * Default maximum unread incoming messages before dropping a session.
-	 */
 	public const DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES = 256;
 
-	/**
-	 * Default maximum queued outgoing bytes before dropping a session.
-	 */
 	public const DEFAULT_MAX_SEND_QUEUE_SIZE = 4194304;
 
 	/**
-	 * Default maximum pending data channels per connection. A peer requires 2 data channels; extra
-	 * headroom is provided because the native extension tracks table entries rather than active channels.
+	 * A peer requires 2 data channels; extra headroom is provided because the native extension tracks table
+	 * entries rather than active channels.
 	 */
 	public const DEFAULT_MAX_PENDING_DATA_CHANNELS = 4;
-
-	/**
-	 * Multiplier applied to receive queue thresholds to calculate native limits.
-	 */
-	public const DEFAULT_NATIVE_MARGIN = 2;
 
 	/**
 	 * @param int $maxMessageSize          Maximum SCTP message size in bytes.
@@ -64,7 +45,6 @@ final class ConnectionBudgetConfiguration{
 	 * @param int $maxReceiveQueueMessages Maximum unread incoming messages before dropping a session.
 	 * @param int $maxSendQueueSize        Maximum queued outgoing bytes before dropping a session.
 	 * @param int $maxPendingDataChannels  Maximum pending data channels permitted per connection.
-	 * @param int $nativeMargin            Multiplier applied to receive queue thresholds to calculate native limits.
 	 */
 	public function __construct(
 		public readonly int $maxMessageSize = self::DEFAULT_MAX_MESSAGE_SIZE,
@@ -72,8 +52,7 @@ final class ConnectionBudgetConfiguration{
 		public readonly int $maxReceiveQueueSize = self::DEFAULT_MAX_RECEIVE_QUEUE_SIZE,
 		public readonly int $maxReceiveQueueMessages = self::DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES,
 		public readonly int $maxSendQueueSize = self::DEFAULT_MAX_SEND_QUEUE_SIZE,
-		public readonly int $maxPendingDataChannels = self::DEFAULT_MAX_PENDING_DATA_CHANNELS,
-		public readonly int $nativeMargin = self::DEFAULT_NATIVE_MARGIN
+		public readonly int $maxPendingDataChannels = self::DEFAULT_MAX_PENDING_DATA_CHANNELS
 	){
 		if($maxMessageSize < 2 || $maxMessageSize > self::DEFAULT_MAX_MESSAGE_SIZE){
 			throw new \InvalidArgumentException("Maximum message size must be between 2 and " . self::DEFAULT_MAX_MESSAGE_SIZE . ", got $maxMessageSize");
@@ -93,24 +72,5 @@ final class ConnectionBudgetConfiguration{
 		if($maxPendingDataChannels < 2){
 			throw new \InvalidArgumentException("Maximum pending data channels must be at least 2, got $maxPendingDataChannels");
 		}
-		if($nativeMargin < 2){
-			throw new \InvalidArgumentException("Native margin must be at least 2, got $nativeMargin");
-		}
-	}
-
-	public function getNativeReceiveQueueSize() : int{
-		return $this->maxReceiveQueueSize * $this->nativeMargin;
-	}
-
-	public function getNativeReceiveQueueMessages() : int{
-		return $this->maxReceiveQueueMessages * $this->nativeMargin;
-	}
-
-	/**
-	 * Returns the unscaled send queue threshold, as native limits are enforced per data channel
-	 * while sessions enforce the threshold across all channels combined.
-	 */
-	public function getNativeSendQueueSize() : int{
-		return $this->maxSendQueueSize;
 	}
 }

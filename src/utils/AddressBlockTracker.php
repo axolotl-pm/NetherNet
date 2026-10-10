@@ -16,6 +16,9 @@ namespace pocketmine\nethernet\utils;
 
 use const INF;
 
+/**
+ * @internal
+ */
 final class AddressBlockTracker implements AddressBlockList{
 
 	/** @phpstan-var array<string, float> */

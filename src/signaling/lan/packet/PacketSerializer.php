@@ -18,8 +18,6 @@ use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\DataDecodeException;
 use pmmp\encoding\LE;
-use pocketmine\nethernet\signaling\lan\DiscoveryCipher;
-use pocketmine\nethernet\signaling\lan\DiscoveryException;
 use function str_repeat;
 use function strlen;
 
@@ -31,10 +29,10 @@ final class PacketSerializer{
 
 	private function __construct(){}
 
-	public static function encode(Packet $packet, int $senderId) : string{
+	public static function encode(Packet $packet) : string{
 		$body = new ByteBufferWriter();
 		LE::writeUnsignedShort($body, $packet->getType()->value);
-		LE::writeUnsignedLong($body, $senderId);
+		LE::writeUnsignedLong($body, $packet->senderId);
 		$body->writeByteArray(str_repeat("\x00", self::PADDING_SIZE));
 		$packet->encodeBody($body);
 
@@ -46,11 +44,9 @@ final class PacketSerializer{
 	}
 
 	/**
-	 * @return array{Packet, int}
-	 *
 	 * @throws DiscoveryException
 	 */
-	public static function decode(string $frame) : array{
+	public static function decode(string $frame) : Packet{
 		$payload = DiscoveryCipher::open($frame);
 		if(strlen($payload) < self::HEADER_SIZE + 2){
 			throw new DiscoveryException("Datagram is too short to hold a header");
@@ -71,11 +67,10 @@ final class PacketSerializer{
 			}
 
 			$packet = match($type){
-				PacketType::REQUEST => new RequestPacket(),
-				PacketType::RESPONSE => new ResponsePacket(),
-				PacketType::MESSAGE => new MessagePacket()
+				PacketType::REQUEST => new RequestPacket($senderId),
+				PacketType::RESPONSE => ResponsePacket::decodeBody($senderId, $in),
+				PacketType::MESSAGE => MessagePacket::decodeBody($senderId, $in)
 			};
-			$packet->decodeBody($in);
 
 			if($in->getUnreadLength() !== 0){
 				throw new DiscoveryException("Datagram has " . $in->getUnreadLength() . " unread bytes remaining");
@@ -84,6 +79,6 @@ final class PacketSerializer{
 			throw new DiscoveryException("Unexpected end of datagram payload: " . $e->getMessage(), 0, $e);
 		}
 
-		return [$packet, $senderId];
+		return $packet;
 	}
 }

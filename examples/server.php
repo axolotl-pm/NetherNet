@@ -37,7 +37,7 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 $listener = new class implements ServerEventListener{
 	public ?ServerInterface $server = null;
 
-	public function onSessionOpen(int $sessionId, string $networkId, InternetAddress $address, ?PeerIdentity $identity) : void{
+	public function onSessionOpen(int $sessionId, string $networkId, InternetAddress $address, ?string $clientAddress, ?PeerIdentity $identity) : void{
 		echo "Session $sessionId: network id $networkId connected from $address" . PHP_EOL;
 	}
 

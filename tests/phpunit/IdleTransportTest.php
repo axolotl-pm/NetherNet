@@ -20,12 +20,10 @@ use pocketmine\nethernet\info\ServerInfo;
 use pocketmine\nethernet\signaling\http\HttpSignaling;
 use pocketmine\nethernet\signaling\lan\LanSignaling;
 use pocketmine\nethernet\signaling\Signaling;
-use pocketmine\nethernet\signaling\SignalingException;
 use pocketmine\nethernet\utils\InternetAddress;
 use function count;
 use function implode;
 use function microtime;
-use function random_int;
 
 /**
  * A transport with nothing to do has to stay quiet.
@@ -50,31 +48,15 @@ final class IdleTransportTest extends TestCase{
 		$this->signaling?->shutdown();
 	}
 
-	/**
-	 * @phpstan-param \Closure(int) : Signaling $factory
-	 */
-	private function startOnAFreePort(\Closure $factory, \Logger $logger) : Signaling{
-		for($attempt = 0; $attempt < 25; ++$attempt){
-			$signaling = $factory(random_int(20000, 60000));
+	private function start(Signaling $signaling, \Logger $logger) : Signaling{
+		$signaling->start(TestSignalingContext::create(new FakeNegotiator("answer-sdp"), $logger));
 
-			try{
-				$signaling->start(TestSignalingContext::create(new FakeNegotiator("answer-sdp"), $logger));
-			}catch(SignalingException){
-				//this machine reserves scattered port ranges; just pick again
-				continue;
-			}
-
-			return $this->signaling = $signaling;
-		}
-
-		self::fail("Could not find a free port to listen on");
+		return $this->signaling = $signaling;
 	}
 
 	public function testIdleHttpSignalingLogsNothing() : void{
 		$logger = new RecordingLogger();
-		$signaling = $this->startOnAFreePort(fn(int $port) => new HttpSignaling(
-			new InternetAddress("127.0.0.1", $port, 4)
-		), $logger);
+		$signaling = $this->start(new HttpSignaling(new InternetAddress("127.0.0.1", 0, 4)), $logger);
 
 		for($i = 0; $i < self::IDLE_PASSES; ++$i){
 			$signaling->tick(microtime(true));
@@ -85,10 +67,10 @@ final class IdleTransportTest extends TestCase{
 
 	public function testIdleLanSignalingLogsNothingBeyondItsStartupLine() : void{
 		$logger = new RecordingLogger();
-		$signaling = $this->startOnAFreePort(fn(int $port) => new LanSignaling(
+		$signaling = $this->start(new LanSignaling(
 			new MutableServerInfoProvider(new ServerInfo(serverName: "host", protocol: 2181, gameVersion: "1.26.50", levelName: "world")),
 			4242,
-			new InternetAddress("127.0.0.1", $port, 4)
+			new InternetAddress("127.0.0.1", 0, 4)
 		), $logger);
 
 		//one line is written when the socket comes up, and nothing after it

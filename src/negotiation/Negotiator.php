@@ -14,36 +14,28 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\negotiation;
 
-/**
- * Manages WebRTC handshakes for incoming connection requests.
- */
 interface Negotiator{
 
 	/**
-	 * Initiates a handshake for an incoming SDP connection offer.
-	 *
-	 * @param string        $networkId     Peer network identifier.
-	 * @param CandidateMode $candidateMode Strategy for candidate delivery.
-	 * @param string|null   $peerAddress   IP address the offer was received from, if the signaling transport
-	 *                                     knows it. It is offered to the peer connection as a candidate so
-	 *                                     that a peer behind NAT can be reached through a TURN relay.
+	 * @param string|null $peerAddress IPv4 or IPv6 address the offer was received from, in any spelling, if the
+	 *                                 signaling transport knows it. It is offered to the peer connection as a
+	 *                                 candidate so that a peer behind NAT can be reached through a TURN relay, and
+	 *                                 is reported as the client address of the session the offer leads to.
 	 *
 	 * @throws NegotiationException if the offer cannot be accepted.
+	 * @throws \InvalidArgumentException if the peer address is not an IPv4 or IPv6 address.
 	 */
 	public function beginNegotiation(string $offerSdp, string $networkId, CandidateMode $candidateMode = CandidateMode::BUNDLED, ?string $peerAddress = null) : Negotiation;
 
 	public function tick(float $now) : void;
 
 	/**
-	 * Returns established connections ready to become active client sessions.
+	 * Drains the peers established since the last call.
 	 *
 	 * @return EstablishedPeer[]
 	 * @phpstan-return list<EstablishedPeer>
 	 */
 	public function takeEstablished() : array;
 
-	/**
-	 * Aborts all ongoing handshakes and releases resources.
-	 */
 	public function shutdown() : void;
 }

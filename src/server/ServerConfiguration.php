@@ -28,17 +28,13 @@ final class ServerConfiguration{
 	public const DEFAULT_CHANNEL_TIMEOUT = 5.0;
 
 	/**
-	 * @param IdentityProvider              $identityProvider    Issues server identity assertions (`a=identity`) for SDP answers.
-	 * @param \Logger                       $logger              Receives the server's diagnostics.
-	 * @param AssertionIdentityVerifier     $identityVerifier    Verifies connecting client identity assertions and GameServerTokens.
-	 * @param PeerTransportFactory          $transportFactory    Creates the transport for each connecting peer.
-	 * @param ConnectionBudgetConfiguration $budget              Resource limits and queue thresholds for peer connections.
-	 * @param float                         $gatheringTimeout    Timeout in seconds for ICE candidate gathering.
-	 * @param float                         $channelTimeout      Timeout in seconds for data channels to open.
-	 * @param int                           $maxRemoteCandidates Maximum ICE candidates a peer may offer or trickle per connection.
-	 * @param string[]|null                 $advertisedAddresses Public IP addresses advertised to connecting clients in bundled answers,
-	 *                                                           or null to advertise all gathered candidates. Unbound addresses are announced
-	 *                                                           as server-reflexive candidates for 1:1 NAT port forwarding.
+	 * @param IdentityProvider $identityProvider    Issues server identity assertions (`a=identity`) for SDP answers.
+	 * @param float            $gatheringTimeout    Timeout in seconds for ICE candidate gathering.
+	 * @param float            $channelTimeout      Timeout in seconds for data channels to open.
+	 * @param int              $maxRemoteCandidates Maximum ICE candidates a peer may offer or trickle per connection.
+	 * @param string[]|null    $advertisedAddresses Public IP addresses advertised to connecting clients in bundled answers,
+	 *                                              or null to advertise all gathered candidates. Unbound addresses are announced
+	 *                                              as server-reflexive candidates for 1:1 NAT port forwarding.
 	 * @phpstan-param list<string>|null $advertisedAddresses
 	 */
 	public function __construct(

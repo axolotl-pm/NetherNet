@@ -25,19 +25,16 @@ use pocketmine\nethernet\protocol\ErrorCode;
 use pocketmine\nethernet\RecordingEventListener;
 use pocketmine\nethernet\RecordingLogger;
 use pocketmine\nethernet\server\NetherNetServer;
-use pocketmine\nethernet\server\SessionManager;
 use pocketmine\nethernet\signaling\lan\packet\MessagePacket;
 use pocketmine\nethernet\signaling\lan\packet\PacketSerializer;
 use pocketmine\nethernet\signaling\lan\packet\RequestPacket;
 use pocketmine\nethernet\signaling\lan\packet\ResponsePacket;
 use pocketmine\nethernet\signaling\Signal;
-use pocketmine\nethernet\signaling\SignalingException;
 use pocketmine\nethernet\signaling\SignalType;
 use pocketmine\nethernet\TestSignalingContext;
 use pocketmine\nethernet\transport\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\utils\InternetAddress;
 use function microtime;
-use function random_int;
 use function socket_bind;
 use function socket_close;
 use function socket_create;
@@ -92,66 +89,38 @@ final class LanSignalingTest extends TestCase{
 	}
 
 	private function startHost(Negotiator $negotiator, ?ServerInfoProvider $infoProvider = null) : void{
-		//an ephemeral port keeps this off 7551, where a real client or another run
-		//of the suite may already be listening
-		for($attempt = 0; $attempt < 20; ++$attempt){
-			$port = random_int(20000, 60000);
-			$signaling = new LanSignaling(
-				$infoProvider ?? new MutableServerInfoProvider(new ServerInfo(serverName: "test host", protocol: 2181, gameVersion: "1.26.50", levelName: "test world", playerCount: 3, maxPlayerCount: 10)),
-				self::HOST_NETWORK_ID,
-				new InternetAddress("127.0.0.1", $port, 4)
-			);
-
-			try{
-				$signaling->start(TestSignalingContext::create($negotiator));
-			}catch(SignalingException){
-				continue;
-			}
-
-			$this->signaling = $signaling;
-			$this->hostPort = $port;
-
-			return;
-		}
-
-		self::fail("Could not find a free port to listen on");
+		$this->signaling = $this->createSignaling($infoProvider);
+		$this->signaling->start(TestSignalingContext::create($negotiator));
+		$this->hostPort = $this->signaling->getBoundAddress()->port;
 	}
 
 	private function startServer(Negotiator $negotiator) : NetherNetServer{
-		for($attempt = 0; $attempt < 20; ++$attempt){
-			$port = random_int(20000, 60000);
-			$server = new NetherNetServer($negotiator, new SessionManager(new RecordingEventListener(), new ConnectionBudgetConfiguration(), $logger = new RecordingLogger()), $logger);
-			$signaling = new LanSignaling(
-				new MutableServerInfoProvider(new ServerInfo(serverName: "test host", protocol: 2181, gameVersion: "1.26.50", levelName: "test world")),
-				self::HOST_NETWORK_ID,
-				new InternetAddress("127.0.0.1", $port, 4)
-			);
-			$server->addSignaling($signaling);
+		$server = new NetherNetServer($negotiator, new RecordingEventListener(), new ConnectionBudgetConfiguration(), new RecordingLogger());
+		$this->signaling = $this->createSignaling();
+		$server->addSignaling($this->signaling);
+		$server->start();
+		$this->hostPort = $this->signaling->getBoundAddress()->port;
 
-			try{
-				$server->start();
-			}catch(SignalingException){
-				continue;
-			}
-
-			$this->signaling = $signaling;
-			$this->hostPort = $port;
-
-			return $server;
-		}
-
-		self::fail("Could not find a free port to listen on");
-	}
-
-	private function sendToHost(packet\Packet $packet, int $senderId = self::PEER_NETWORK_ID) : void{
-		$frame = PacketSerializer::encode($packet, $senderId);
-		self::assertNotFalse(socket_sendto($this->peer(), $frame, strlen($frame), 0, "127.0.0.1", $this->hostPort));
+		return $server;
 	}
 
 	/**
-	 * @return array{packet\Packet, int}|null
+	 * Port 0 keeps this off 7551, where a real client or another run of the suite may already be listening.
 	 */
-	private function receive() : ?array{
+	private function createSignaling(?ServerInfoProvider $infoProvider = null) : LanSignaling{
+		return new LanSignaling(
+			$infoProvider ?? new MutableServerInfoProvider(new ServerInfo(serverName: "test host", protocol: 2181, gameVersion: "1.26.50", levelName: "test world", playerCount: 3, maxPlayerCount: 10)),
+			self::HOST_NETWORK_ID,
+			new InternetAddress("127.0.0.1", 0, 4)
+		);
+	}
+
+	private function sendToHost(packet\Packet $packet) : void{
+		$frame = PacketSerializer::encode($packet);
+		self::assertNotFalse(socket_sendto($this->peer(), $frame, strlen($frame), 0, "127.0.0.1", $this->hostPort));
+	}
+
+	private function receive() : ?packet\Packet{
 		//one pass through the host, then look for what it sent back
 		for($attempt = 0; $attempt < 50; ++$attempt){
 			$this->signaling?->tick(microtime(true));
@@ -174,14 +143,14 @@ final class LanSignalingTest extends TestCase{
 
 	public function testRequestIsAnsweredWithTheHostAdvert() : void{
 		$this->startHost(new FakeNegotiator("answer-sdp"));
-		$this->sendToHost(new RequestPacket());
+		$this->sendToHost(new RequestPacket(self::PEER_NETWORK_ID));
 
 		$received = $this->receive();
 		self::assertNotNull($received, "the host never answered the discovery request");
 
-		[$packet, $senderId] = $received;
+		$packet = $received;
 		self::assertInstanceOf(ResponsePacket::class, $packet);
-		self::assertSame(self::HOST_NETWORK_ID, $senderId);
+		self::assertSame(self::HOST_NETWORK_ID, $packet->senderId);
 
 		$advert = ServerInfoCodec::decode($packet->applicationData);
 		self::assertSame("test host", $advert->serverName);
@@ -192,7 +161,7 @@ final class LanSignalingTest extends TestCase{
 	public function testDiscoveryRequestGoesUnansweredWhileThereIsNothingToAdvertise() : void{
 		$this->startHost(new FakeNegotiator("answer-sdp"), new MutableServerInfoProvider());
 
-		$this->sendToHost(new RequestPacket());
+		$this->sendToHost(new RequestPacket(self::PEER_NETWORK_ID));
 
 		self::assertNull($this->receive());
 	}
@@ -203,7 +172,7 @@ final class LanSignalingTest extends TestCase{
 	 */
 	public function testOwnDatagramIsIgnored() : void{
 		$this->startHost(new FakeNegotiator("answer-sdp"));
-		$this->sendToHost(new RequestPacket(), senderId: self::HOST_NETWORK_ID);
+		$this->sendToHost(new RequestPacket(self::HOST_NETWORK_ID));
 
 		self::assertNull($this->receive(), "the host answered a datagram carrying its own network id");
 	}
@@ -211,7 +180,7 @@ final class LanSignalingTest extends TestCase{
 	/** Traffic for another peer shares the broadcast domain and is not ours to answer. */
 	public function testMessageForAnotherRecipientIsIgnored() : void{
 		$this->startHost(new FakeNegotiator("answer-sdp"));
-		$this->sendToHost(new MessagePacket(999999, "CONNECTREQUEST 1 offer-sdp"));
+		$this->sendToHost(new MessagePacket(self::PEER_NETWORK_ID, 999999, "CONNECTREQUEST 1 offer-sdp"));
 
 		self::assertNull($this->receive());
 	}
@@ -220,11 +189,11 @@ final class LanSignalingTest extends TestCase{
 		$negotiator = new FakeNegotiator("answer-sdp", ["candidate:1 1 udp 1 127.0.0.1 1 typ host"]);
 		$this->startHost($negotiator);
 
-		$this->sendToHost(new MessagePacket(self::HOST_NETWORK_ID, "CONNECTREQUEST 77 offer-sdp"));
+		$this->sendToHost(new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "CONNECTREQUEST 77 offer-sdp"));
 
 		$received = $this->receive();
 		self::assertNotNull($received, "the host never answered the offer");
-		[$packet] = $received;
+		$packet = $received;
 		self::assertInstanceOf(MessagePacket::class, $packet);
 		self::assertSame(self::PEER_NETWORK_ID, $packet->recipientId);
 
@@ -239,7 +208,7 @@ final class LanSignalingTest extends TestCase{
 
 		$received = $this->receive();
 		self::assertNotNull($received, "the host never trickled its candidate");
-		[$candidatePacket] = $received;
+		$candidatePacket = $received;
 		self::assertInstanceOf(MessagePacket::class, $candidatePacket);
 
 		$candidate = Signal::parse($candidatePacket->data);
@@ -252,10 +221,10 @@ final class LanSignalingTest extends TestCase{
 		$negotiator = new FakeNegotiator("answer-sdp");
 		$this->startHost($negotiator);
 
-		$this->sendToHost(new MessagePacket(self::HOST_NETWORK_ID, "CONNECTREQUEST 77 offer-sdp"));
+		$this->sendToHost(new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "CONNECTREQUEST 77 offer-sdp"));
 		self::assertNotNull($this->receive());
 
-		$this->sendToHost(new MessagePacket(self::HOST_NETWORK_ID, "CANDIDATEADD 77 candidate:9 1 udp 1 10.0.0.1 5 typ host"));
+		$this->sendToHost(new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "CANDIDATEADD 77 candidate:9 1 udp 1 10.0.0.1 5 typ host"));
 		$this->receive();
 
 		self::assertSame(["candidate:9 1 udp 1 10.0.0.1 5 typ host"], $negotiator->negotiation?->remoteCandidates);
@@ -264,9 +233,25 @@ final class LanSignalingTest extends TestCase{
 	/** Vanilla sends these as filler, and there is nothing to do with one. */
 	public function testPingMessageIsIgnored() : void{
 		$this->startHost(new FakeNegotiator("answer-sdp"));
-		$this->sendToHost(new MessagePacket(self::HOST_NETWORK_ID, "Ping"));
+		$this->sendToHost(new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "Ping"));
 
 		self::assertNull($this->receive());
+	}
+
+	/**
+	 * A peer that reports an error already knows the connection is dead. Answering with an error of our own
+	 * tells it nothing, and two hosts doing so to each other would never stop.
+	 */
+	public function testErrorReportedByThePeerIsNotEchoedBack() : void{
+		$negotiator = new FakeNegotiator(null);
+		$this->startHost($negotiator);
+
+		$this->sendToHost(new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "CONNECTREQUEST 5 offer-sdp"));
+		self::assertNull($this->receive());
+		$this->sendToHost(new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "CONNECTERROR 5 2"));
+
+		self::assertNull($this->receive(), "the host answered an error with an error");
+		self::assertTrue($negotiator->negotiation?->isFailed());
 	}
 
 	public function testFailedNegotiationIsReportedToThePeer() : void{
@@ -275,11 +260,11 @@ final class LanSignalingTest extends TestCase{
 		$negotiator = new FakeNegotiator(null, failWith: ErrorCode::IDENTITY_NOT_ALLOWED);
 		$this->startHost($negotiator);
 
-		$this->sendToHost(new MessagePacket(self::HOST_NETWORK_ID, "CONNECTREQUEST 5 offer-sdp"));
+		$this->sendToHost(new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "CONNECTREQUEST 5 offer-sdp"));
 
 		$received = $this->receive();
 		self::assertNotNull($received);
-		[$packet] = $received;
+		$packet = $received;
 		self::assertInstanceOf(MessagePacket::class, $packet);
 
 		$signal = Signal::parse($packet->data);
@@ -300,15 +285,15 @@ final class LanSignalingTest extends TestCase{
 		socket_set_nonblock($impostor);
 
 		try{
-			$this->sendToHost(new MessagePacket(self::HOST_NETWORK_ID, "CONNECTREQUEST 77 offer-sdp"));
+			$this->sendToHost(new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "CONNECTREQUEST 77 offer-sdp"));
 
 			//claims the peer's id from a different socket, before the host has answered
-			$spoofed = PacketSerializer::encode(new MessagePacket(self::HOST_NETWORK_ID, "Ping"), self::PEER_NETWORK_ID);
+			$spoofed = PacketSerializer::encode(new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "Ping"));
 			self::assertNotFalse(socket_sendto($impostor, $spoofed, strlen($spoofed), 0, "127.0.0.1", $this->hostPort));
 
 			$received = $this->receive();
 			self::assertNotNull($received, "the host never answered the offer");
-			[$packet] = $received;
+			$packet = $received;
 			self::assertInstanceOf(MessagePacket::class, $packet);
 			self::assertSame(SignalType::CONNECT_RESPONSE, Signal::parse($packet->data)->type);
 
@@ -333,11 +318,11 @@ final class LanSignalingTest extends TestCase{
 		$server = $this->startServer(new FakeNegotiator("answer-sdp"));
 
 		$server->blockAddress("127.0.0.1", -1);
-		$this->sendToHost(new RequestPacket());
+		$this->sendToHost(new RequestPacket(self::PEER_NETWORK_ID));
 		self::assertNull($this->receive(), "the host answered a blocked address");
 
 		$server->unblockAddress("127.0.0.1");
-		$this->sendToHost(new RequestPacket());
+		$this->sendToHost(new RequestPacket(self::PEER_NETWORK_ID));
 		self::assertNotNull($this->receive(), "the host stayed silent after the block was lifted");
 
 		$server->shutdown();

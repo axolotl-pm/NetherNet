@@ -22,6 +22,7 @@ use pocketmine\nethernet\session\SessionException;
 use pocketmine\nethernet\signaling\Signaling;
 use pocketmine\nethernet\signaling\SignalingContext;
 use pocketmine\nethernet\signaling\SignalingException;
+use pocketmine\nethernet\transport\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\utils\AddressBlockTracker;
 use pocketmine\nethernet\utils\InternetAddress;
 use function count;
@@ -36,15 +37,18 @@ final class NetherNetServer implements ServerInterface{
 	 */
 	private array $signaling = [];
 
+	private readonly SessionManager $sessionManager;
 	private readonly AddressBlockTracker $blockTracker;
 
 	private ServerState $state = ServerState::CREATED;
 
 	public function __construct(
 		private readonly Negotiator $negotiator,
-		private readonly SessionManager $sessionManager,
+		ServerEventListener $listener,
+		ConnectionBudgetConfiguration $budget,
 		private readonly \Logger $logger
 	){
+		$this->sessionManager = new SessionManager($listener, $budget, $logger);
 		$this->blockTracker = new AddressBlockTracker();
 	}
 
@@ -61,11 +65,8 @@ final class NetherNetServer implements ServerInterface{
 				$configuration->logger,
 				$configuration->advertisedAddresses
 			),
-			new SessionManager(
-				$listener,
-				$configuration->budget,
-				$configuration->logger
-			),
+			$listener,
+			$configuration->budget,
 			$configuration->logger
 		);
 	}
@@ -134,8 +135,8 @@ final class NetherNetServer implements ServerInterface{
 			unset($peers[$index]);
 
 			/* The peer may have been blocked, or may be reaching us from a blocked address, since it sent its offer. */
-			if($this->blockTracker->isBlocked($peer->address->ip)){
-				$this->logger->debug("Closed connection from blocked address: " . $peer->address->ip);
+			if($this->blockTracker->isBlocked($peer->address->ip) || ($peer->clientAddress !== null && $this->blockTracker->isBlocked($peer->clientAddress))){
+				$this->logger->debug("Closed connection from blocked address: " . $peer->address->ip . ($peer->clientAddress !== null ? " (client $peer->clientAddress)" : ""));
 				$peer->transport->close();
 				continue;
 			}
@@ -154,20 +155,32 @@ final class NetherNetServer implements ServerInterface{
 	}
 
 	public function sendPacket(int $sessionId, string $payload, Reliability $reliability = Reliability::RELIABLE, ?int $receiptId = null) : void{
+		$session = $this->sessionManager->getSession($sessionId);
+		if($session === null){
+			return;
+		}
+
 		try{
-			$this->sessionManager->getSession($sessionId)?->send($payload, $reliability, $receiptId);
+			$session->send($payload, $reliability, $receiptId);
 		}catch(SessionException $e){
 			/* The session has closed itself; the next tick reports it to the listener with the reason. */
 			$this->logger->debug("Session $sessionId could not be sent to: " . $e->getMessage());
+		}catch(\InvalidArgumentException $e){
+			if($reliability === Reliability::UNRELIABLE){
+				/* Nothing depends on an unreliable packet arriving, so one that cannot be sent is only lost. */
+				$this->logger->debug("Dropped an unreliable packet for session $sessionId: " . $e->getMessage());
+
+				return;
+			}
+
+			/* A reliable packet that can never reach the peer leaves a hole in a stream that was promised whole. */
+			$this->logger->debug("Closing session $sessionId: " . $e->getMessage());
+			$session->initiateDisconnect(DisconnectReason::SEND_FAILED);
 		}
 	}
 
 	public function closeSession(int $sessionId, DisconnectReason $reason = DisconnectReason::SERVER_DISCONNECT) : void{
 		$this->sessionManager->getSession($sessionId)?->initiateDisconnect($reason);
-	}
-
-	public function setPacketsPerTickLimit(int $limit) : void{
-		$this->sessionManager->setPacketsPerTickLimit($limit);
 	}
 
 	public function blockAddress(string $address, int $timeout = 300) : void{
@@ -177,7 +190,7 @@ final class NetherNetServer implements ServerInterface{
 		$blocked = InternetAddress::normalizeIp($address) ?? $address;
 		foreach($this->sessionManager->getSessions() as $session){
 			$sessionIp = $session->getRemoteAddress()->ip;
-			if((InternetAddress::normalizeIp($sessionIp) ?? $sessionIp) === $blocked){
+			if((InternetAddress::normalizeIp($sessionIp) ?? $sessionIp) === $blocked || $session->getClientAddress() === $blocked){
 				$session->initiateDisconnect(DisconnectReason::ADDRESS_BLOCKED);
 			}
 		}
@@ -231,9 +244,5 @@ final class NetherNetServer implements ServerInterface{
 
 	public function isRunning() : bool{
 		return $this->state === ServerState::RUNNING;
-	}
-
-	public function getSessionCount() : int{
-		return $this->sessionManager->count();
 	}
 }

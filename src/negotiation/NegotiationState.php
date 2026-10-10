@@ -14,26 +14,18 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\negotiation;
 
+/**
+ * @internal
+ */
 enum NegotiationState{
 
-	/**
-	 * Gathering local ICE candidates.
-	 */
 	case GATHERING;
 
 	/**
 	 * SDP answer generated, waiting for remote peer to open required SCTP data channels.
 	 */
 	case ANSWERED;
-
-	/**
-	 * Data channels opened - peer connection ready to transition to an active session.
-	 */
 	case ESTABLISHED;
-
-	/**
-	 * Negotiation aborted or failed.
-	 */
 	case FAILED;
 
 	public function isFinished() : bool{

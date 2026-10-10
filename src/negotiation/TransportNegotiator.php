@@ -23,6 +23,7 @@ use pocketmine\nethernet\sdp\SessionDescription;
 use pocketmine\nethernet\transport\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\transport\PeerTransportFactory;
 use pocketmine\nethernet\transport\TransportException;
+use pocketmine\nethernet\utils\InternetAddress;
 
 final class TransportNegotiator implements Negotiator{
 
@@ -60,19 +61,15 @@ final class TransportNegotiator implements Negotiator{
 		private readonly \Logger $logger,
 		?array $advertisedAddresses = null
 	){
-		if($gatheringTimeout <= 0.0 || $channelTimeout <= 0.0){
-			throw new \InvalidArgumentException("Timeouts must be positive");
-		}
-		if($maxRemoteCandidates < 1){
-			throw new \InvalidArgumentException("Maximum remote candidates must be positive, got $maxRemoteCandidates");
-		}
-
 		$this->answerBuilder = new AnswerBuilder($identityProvider, $advertisedAddresses);
 	}
 
 	public function beginNegotiation(string $offerSdp, string $networkId, CandidateMode $candidateMode = CandidateMode::BUNDLED, ?string $peerAddress = null) : Negotiation{
 		if($this->shutDown){
 			throw new NegotiationException("Negotiator is shut down", ErrorCode::NO_SIGNALING_CHANNEL);
+		}
+		if($peerAddress !== null){
+			$peerAddress = InternetAddress::normalizeIp($peerAddress) ?? throw new \InvalidArgumentException("Peer address \"$peerAddress\" is not an IP address");
 		}
 
 		try{
@@ -111,6 +108,7 @@ final class TransportNegotiator implements Negotiator{
 		$negotiation = new TransportNegotiation(
 			$transport,
 			$networkId,
+			$peerAddress,
 			$identity,
 			$candidateMode,
 			$this->answerBuilder,

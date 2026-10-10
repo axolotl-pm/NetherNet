@@ -16,8 +16,8 @@ namespace pocketmine\nethernet\signaling\lan\packet;
 
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
+use pmmp\encoding\DataDecodeException;
 use pmmp\encoding\LE;
-use pocketmine\nethernet\signaling\lan\DiscoveryException;
 use function strlen;
 
 final class MessagePacket extends Packet{
@@ -25,27 +25,29 @@ final class MessagePacket extends Packet{
 	private const MAX_DATA_LENGTH = 65535;
 
 	public function __construct(
-		public int $recipientId = 0,
-		public string $data = ""
-	){}
+		int $senderId,
+		public readonly int $recipientId,
+		public readonly string $data
+	){
+		parent::__construct($senderId);
+	}
 
 	public function getType() : PacketType{ return PacketType::MESSAGE; }
 
-	public function decodeBody(ByteBufferReader $in) : void{
-		$this->recipientId = LE::readUnsignedLong($in);
+	/**
+	 * @throws DataDecodeException
+	 * @throws DiscoveryException
+	 */
+	public static function decodeBody(int $senderId, ByteBufferReader $in) : self{
+		$recipientId = LE::readUnsignedLong($in);
 
 		$length = LE::readUnsignedInt($in);
 		if($length > self::MAX_DATA_LENGTH){
 			throw new DiscoveryException("Message of $length bytes is larger than a datagram can carry");
 		}
 
-		$this->data = $in->readByteArray($length);
-
-		// Read any trailing bytes in the payload to maintain compatibility with vanilla packets
-		$trailing = $in->getUnreadLength();
-		if($trailing > 0){
-			$this->data .= $in->readByteArray($trailing);
-		}
+		// Vanilla packets can carry more than the length they declare; all of it is the message
+		return new self($senderId, $recipientId, $in->readByteArray($length) . $in->readByteArray($in->getUnreadLength()));
 	}
 
 	public function encodeBody(ByteBufferWriter $out) : void{

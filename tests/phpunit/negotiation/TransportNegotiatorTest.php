@@ -25,19 +25,17 @@ use pocketmine\nethernet\protocol\ErrorCode;
 use pocketmine\nethernet\protocol\Reliability;
 use pocketmine\nethernet\RecordingLogger;
 use pocketmine\nethernet\sdp\SessionDescription;
+use pocketmine\nethernet\SdpFixture;
 use pocketmine\nethernet\transport\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\transport\TransportState;
 use pocketmine\nethernet\utils\InternetAddress;
 use function array_fill;
-use function implode;
 
 final class TransportNegotiatorTest extends TestCase{
 
 	private const GATHERING_TIMEOUT = 15.0;
 	private const CHANNEL_TIMEOUT = 5.0;
 	private const MAX_REMOTE_CANDIDATES = 4;
-
-	private const HOST_CANDIDATE = "candidate:1 1 UDP 2122317823 192.168.1.20 51000 typ host";
 
 	private static ServerIdentity $identity;
 
@@ -66,34 +64,6 @@ final class TransportNegotiatorTest extends TestCase{
 		);
 	}
 
-	/**
-	 * @param string[] $candidates
-	 * @phpstan-param list<string> $candidates
-	 */
-	private static function sdp(array $candidates = []) : string{
-		$lines = [
-			"v=0",
-			"o=- 1 2 IN IP4 127.0.0.1",
-			"s=-",
-			"t=0 0",
-			"a=group:BUNDLE 0",
-			"m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
-			"c=IN IP4 0.0.0.0",
-			"a=ice-ufrag:abcd",
-			"a=ice-pwd:0123456789abcdef",
-			"a=fingerprint:sha-256 AA:BB:CC:DD",
-			"a=setup:active",
-			"a=mid:0",
-			"a=sctp-port:5000",
-			"a=max-message-size:262144"
-		];
-		foreach($candidates as $candidate){
-			$lines[] = "a=" . $candidate;
-		}
-
-		return implode("\r\n", $lines) . "\r\n";
-	}
-
 	private function transport() : FakePeerTransport{
 		self::assertCount(1, $this->factory->created);
 
@@ -104,10 +74,10 @@ final class TransportNegotiatorTest extends TestCase{
 	 * Takes a negotiation as far as a signaled answer.
 	 */
 	private function answered(CandidateMode $mode = CandidateMode::BUNDLED) : Negotiation{
-		$negotiation = $this->negotiator->beginNegotiation(self::sdp(), "1234", $mode);
+		$negotiation = $this->negotiator->beginNegotiation(SdpFixture::description(), "1234", $mode);
 		$transport = $this->transport();
 		$transport->gatheringComplete = true;
-		$transport->localDescription = self::sdp([self::HOST_CANDIDATE]);
+		$transport->localDescription = SdpFixture::description([SdpFixture::HOST_CANDIDATE]);
 		$this->negotiator->tick(100.0);
 		self::assertNotNull($negotiation->getAnswer());
 
@@ -121,7 +91,7 @@ final class TransportNegotiatorTest extends TestCase{
 	}
 
 	public function testOfferIsHandedToTheTransportWithoutItsIdentity() : void{
-		$this->negotiator->beginNegotiation(self::sdp(), "1234");
+		$this->negotiator->beginNegotiation(SdpFixture::description(), "1234");
 
 		$offer = $this->transport()->remoteOffer;
 		self::assertNotNull($offer);
@@ -132,14 +102,14 @@ final class TransportNegotiatorTest extends TestCase{
 	 * An HTTP client gets exactly one response, so its answer has to carry every candidate.
 	 */
 	public function testBundledAnswerWaitsUntilGatheringIsComplete() : void{
-		$negotiation = $this->negotiator->beginNegotiation(self::sdp(), "1234");
+		$negotiation = $this->negotiator->beginNegotiation(SdpFixture::description(), "1234");
 		$transport = $this->transport();
-		$transport->localDescription = self::sdp();
+		$transport->localDescription = SdpFixture::description();
 
 		$this->negotiator->tick(100.0);
 		self::assertNull($negotiation->getAnswer());
 
-		$transport->localDescription = self::sdp([self::HOST_CANDIDATE]);
+		$transport->localDescription = SdpFixture::description([SdpFixture::HOST_CANDIDATE]);
 		$transport->gatheringComplete = true;
 		$this->negotiator->tick(100.1);
 
@@ -156,9 +126,9 @@ final class TransportNegotiatorTest extends TestCase{
 	 * carries none.
 	 */
 	public function testTrickleAnswerIsSentBeforeGatheringCompletesAndCarriesNoCandidates() : void{
-		$negotiation = $this->negotiator->beginNegotiation(self::sdp(), "1234", CandidateMode::TRICKLE);
+		$negotiation = $this->negotiator->beginNegotiation(SdpFixture::description(), "1234", CandidateMode::TRICKLE);
 		$transport = $this->transport();
-		$transport->localDescription = self::sdp([self::HOST_CANDIDATE]);
+		$transport->localDescription = SdpFixture::description([SdpFixture::HOST_CANDIDATE]);
 
 		self::assertSame([], $negotiation->takeLocalCandidates(), "candidates were offered before the answer they belong to");
 
@@ -168,7 +138,7 @@ final class TransportNegotiatorTest extends TestCase{
 		self::assertNotNull($answer);
 		self::assertSame(0, SessionDescription::parse($answer)->countCandidates());
 
-		$transport->localCandidates = [self::HOST_CANDIDATE];
+		$transport->localCandidates = [SdpFixture::HOST_CANDIDATE];
 		$candidates = $negotiation->takeLocalCandidates();
 		self::assertCount(1, $candidates);
 		self::assertStringContainsString("192.168.1.20 51000 typ host", $candidates[0]);
@@ -178,13 +148,13 @@ final class TransportNegotiatorTest extends TestCase{
 
 	public function testBundledNegotiationNeverTricklesCandidates() : void{
 		$negotiation = $this->answered();
-		$this->transport()->localCandidates = [self::HOST_CANDIDATE];
+		$this->transport()->localCandidates = [SdpFixture::HOST_CANDIDATE];
 
 		self::assertSame([], $negotiation->takeLocalCandidates());
 	}
 
 	public function testGatheringThatNeverCompletesTimesOut() : void{
-		$negotiation = $this->negotiator->beginNegotiation(self::sdp(), "1234");
+		$negotiation = $this->negotiator->beginNegotiation(SdpFixture::description(), "1234");
 
 		$this->negotiator->tick(100.0);
 		$this->negotiator->tick(100.0 + self::GATHERING_TIMEOUT - 0.01);
@@ -235,12 +205,12 @@ final class TransportNegotiatorTest extends TestCase{
 	 * held against it.
 	 */
 	public function testPeerThatNeverOpensItsChannelsTimesOut() : void{
-		$negotiation = $this->negotiator->beginNegotiation(self::sdp(), "1234");
+		$negotiation = $this->negotiator->beginNegotiation(SdpFixture::description(), "1234");
 		$transport = $this->transport();
 		$this->negotiator->tick(100.0);
 
 		$transport->gatheringComplete = true;
-		$transport->localDescription = self::sdp();
+		$transport->localDescription = SdpFixture::description();
 		$this->negotiator->tick(100.0 + self::GATHERING_TIMEOUT - 1.0);
 		self::assertNotNull($negotiation->getAnswer());
 
@@ -287,7 +257,7 @@ final class TransportNegotiatorTest extends TestCase{
 	}
 
 	public function testTransportThatBreaksFailsTheNegotiation() : void{
-		$negotiation = $this->negotiator->beginNegotiation(self::sdp(), "1234");
+		$negotiation = $this->negotiator->beginNegotiation(SdpFixture::description(), "1234");
 		$this->transport()->state = TransportState::FAILED;
 
 		$this->negotiator->tick(100.0);
@@ -300,7 +270,7 @@ final class TransportNegotiatorTest extends TestCase{
 	 * is closed on the spot, and the negotiator has to cope with finding it that way on its next tick.
 	 */
 	public function testNegotiationFailedFromOutsideIsDroppedQuietly() : void{
-		$negotiation = $this->negotiator->beginNegotiation(self::sdp(), "1234");
+		$negotiation = $this->negotiator->beginNegotiation(SdpFixture::description(), "1234");
 		$negotiation->fail("client went away", ErrorCode::SIGNALING_UNKNOWN_ERROR);
 		self::assertTrue($this->transport()->closed);
 
@@ -325,7 +295,7 @@ final class TransportNegotiatorTest extends TestCase{
 		$negotiator = $this->createNegotiator(allowAnonymous: false);
 
 		try{
-			$negotiator->beginNegotiation(self::sdp(), "1234");
+			$negotiator->beginNegotiation(SdpFixture::description(), "1234");
 			self::fail("an anonymous offer was accepted");
 		}catch(NegotiationException $e){
 			self::assertSame(ErrorCode::IDENTITY_NOT_ALLOWED, $e->getErrorCode());
@@ -335,7 +305,7 @@ final class TransportNegotiatorTest extends TestCase{
 
 	public function testOfferWithTooManyCandidatesIsRefused() : void{
 		try{
-			$this->negotiator->beginNegotiation(self::sdp(array_fill(0, self::MAX_REMOTE_CANDIDATES + 1, self::HOST_CANDIDATE)), "1234");
+			$this->negotiator->beginNegotiation(SdpFixture::description(array_fill(0, self::MAX_REMOTE_CANDIDATES + 1, SdpFixture::HOST_CANDIDATE)), "1234");
 			self::fail("an offer over the candidate limit was accepted");
 		}catch(NegotiationException $e){
 			self::assertSame(ErrorCode::CANDIDATE_ADD, $e->getErrorCode());
@@ -347,7 +317,7 @@ final class TransportNegotiatorTest extends TestCase{
 		$this->factory->fail = true;
 
 		try{
-			$this->negotiator->beginNegotiation(self::sdp(), "1234");
+			$this->negotiator->beginNegotiation(SdpFixture::description(), "1234");
 			self::fail("the offer was accepted without a transport");
 		}catch(NegotiationException $e){
 			self::assertSame(ErrorCode::FAILED_TO_CREATE_PEER_CONNECTION, $e->getErrorCode());
@@ -358,7 +328,7 @@ final class TransportNegotiatorTest extends TestCase{
 		$this->factory->rejectOffers = true;
 
 		try{
-			$this->negotiator->beginNegotiation(self::sdp(), "1234");
+			$this->negotiator->beginNegotiation(SdpFixture::description(), "1234");
 			self::fail("the offer was accepted although the transport rejected it");
 		}catch(NegotiationException $e){
 			self::assertSame(ErrorCode::FAILED_TO_SET_REMOTE_DESCRIPTION, $e->getErrorCode());
@@ -371,25 +341,35 @@ final class TransportNegotiatorTest extends TestCase{
 	 * is one the server knows works, so it is tried too.
 	 */
 	public function testAddressTheOfferCameFromIsTriedAsACandidate() : void{
-		$this->negotiator->beginNegotiation(self::sdp([self::HOST_CANDIDATE]), "1234", peerAddress: "203.0.113.5");
+		$this->negotiator->beginNegotiation(SdpFixture::description([SdpFixture::HOST_CANDIDATE]), "1234", peerAddress: "203.0.113.5");
 
 		$candidates = $this->transport()->remoteCandidates;
 		self::assertCount(1, $candidates);
 		self::assertStringContainsString("203.0.113.5 51000 typ srflx", $candidates[0]);
 	}
 
+	public function testAddressTheOfferAlreadyNamesInAnotherSpellingIsNotAddedAgain() : void{
+		$this->negotiator->beginNegotiation(
+			SdpFixture::description(["candidate:1 1 UDP 2122317823 2001:db8:0:0:0:0:0:1 51000 typ host"]),
+			"1234",
+			peerAddress: "[2001:DB8::1]"
+		);
+
+		self::assertSame([], $this->transport()->remoteCandidates);
+	}
+
 	public function testTrickledCandidatesBeyondTheLimitAreIgnored() : void{
-		$negotiation = $this->negotiator->beginNegotiation(self::sdp(), "1234", CandidateMode::TRICKLE);
+		$negotiation = $this->negotiator->beginNegotiation(SdpFixture::description(), "1234", CandidateMode::TRICKLE);
 
 		for($i = 0; $i < self::MAX_REMOTE_CANDIDATES + 3; ++$i){
-			$negotiation->addRemoteCandidate(self::HOST_CANDIDATE);
+			$negotiation->addRemoteCandidate(SdpFixture::HOST_CANDIDATE);
 		}
 
 		self::assertCount(self::MAX_REMOTE_CANDIDATES, $this->transport()->remoteCandidates);
 	}
 
 	public function testCandidateTheTransportCannotUseIsReported() : void{
-		$negotiation = $this->negotiator->beginNegotiation(self::sdp(), "1234", CandidateMode::TRICKLE);
+		$negotiation = $this->negotiator->beginNegotiation(SdpFixture::description(), "1234", CandidateMode::TRICKLE);
 		$this->transport()->rejectCandidates = true;
 
 		try{
@@ -402,13 +382,13 @@ final class TransportNegotiatorTest extends TestCase{
 	}
 
 	public function testShutdownFailsOngoingNegotiationsAndClosesWaitingPeers() : void{
-		$ongoing = $this->negotiator->beginNegotiation(self::sdp(), "1111");
+		$ongoing = $this->negotiator->beginNegotiation(SdpFixture::description(), "1111");
 		$ongoingTransport = $this->factory->created[0];
 
-		$this->negotiator->beginNegotiation(self::sdp(), "2222");
+		$this->negotiator->beginNegotiation(SdpFixture::description(), "2222");
 		$waitingTransport = $this->factory->created[1];
 		$waitingTransport->gatheringComplete = true;
-		$waitingTransport->localDescription = self::sdp();
+		$waitingTransport->localDescription = SdpFixture::description();
 		$this->negotiator->tick(100.0);
 		$this->openChannels($waitingTransport);
 		$this->negotiator->tick(100.1);
@@ -425,7 +405,7 @@ final class TransportNegotiatorTest extends TestCase{
 		$this->negotiator->shutdown();
 
 		try{
-			$this->negotiator->beginNegotiation(self::sdp(), "1234");
+			$this->negotiator->beginNegotiation(SdpFixture::description(), "1234");
 			self::fail("an offer was accepted after shutdown");
 		}catch(NegotiationException $e){
 			self::assertSame(ErrorCode::NO_SIGNALING_CHANNEL, $e->getErrorCode());

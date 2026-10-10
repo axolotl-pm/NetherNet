@@ -14,9 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\protocol;
 
-/**
- * Protocol error codes reported during signaling and WebRTC negotiation.
- */
 enum ErrorCode : int{
 
 	case NONE = 0;
@@ -55,14 +52,6 @@ enum ErrorCode : int{
 	case INTERNAL_ERROR_JSON_SERIALIZATION = 33;
 	case INVALID_ARGUMENT = 34;
 	case GENERIC_FAILURE = 35;
-
-	/**
-	 * Failed to generate a local identity assertion.
-	 */
 	case FAILED_TO_CREATE_IDENTITY_ASSERTION = 36;
-
-	/**
-	 * Remote peer identity verification failed.
-	 */
 	case IDENTITY_NOT_ALLOWED = 37;
 }

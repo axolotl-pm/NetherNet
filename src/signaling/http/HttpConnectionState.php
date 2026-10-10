@@ -14,31 +14,32 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\http;
 
+/**
+ * @internal
+ */
 enum HttpConnectionState{
-
 	/**
-	 * Non-blocking TLS handshake in progress.
+	 * On a TLS listener, waiting for the first byte to tell a TLS client from a plain HTTP one.
 	 */
-	case HANDSHAKE;
-
+	case SNIFFING;
+	case TLS_HANDSHAKE;
 	case READING_HEAD;
-	case READING_BODY;
-
 	/**
-	 * Awaiting SDP answer generation from the negotiator.
+	 * A plain HTTP request on a TLS listener; its head is read only to redirect it.
 	 */
+	case READING_HEAD_TO_REDIRECT;
+	case READING_BODY;
 	case NEGOTIATING;
-
 	case WRITING;
 	case DONE;
 
 	/**
-	 * Returns true if the connection is still in the request-reception phase.
+	 * Returns whether the client has yet to deliver a complete request.
 	 */
 	public function isAwaitingRequest() : bool{
 		return match($this){
-			self::HANDSHAKE, self::READING_HEAD, self::READING_BODY => true,
-			default => false
+			self::SNIFFING, self::TLS_HANDSHAKE, self::READING_HEAD, self::READING_HEAD_TO_REDIRECT, self::READING_BODY => true,
+			self::NEGOTIATING, self::WRITING, self::DONE => false
 		};
 	}
 }

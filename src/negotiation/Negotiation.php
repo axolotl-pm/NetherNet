@@ -16,9 +16,6 @@ namespace pocketmine\nethernet\negotiation;
 
 use pocketmine\nethernet\protocol\ErrorCode;
 
-/**
- * Handle representing an in-progress WebRTC peer connection negotiation.
- */
 interface Negotiation{
 
 	/**
@@ -35,22 +32,17 @@ interface Negotiation{
 	public function getFailureCode() : ErrorCode;
 
 	/**
-	 * Adds a remote ICE candidate received via trickle signaling.
-	 *
 	 * @throws NegotiationException
 	 */
 	public function addRemoteCandidate(string $candidate) : void;
 
 	/**
-	 * Drains and returns newly gathered local ICE candidates.
+	 * Drains the local ICE candidates gathered since the last call.
 	 *
 	 * @return string[]
 	 * @phpstan-return list<string>
 	 */
 	public function takeLocalCandidates() : array;
 
-	/**
-	 * Aborts the negotiation with a specified failure reason and code.
-	 */
 	public function fail(string $reason, ErrorCode $code = ErrorCode::GENERIC_FAILURE) : void;
 }

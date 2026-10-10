@@ -80,7 +80,6 @@ final class FramingTest extends TestCase{
 	public function testPayloadOfExactlyOneSegmentIsNotFragmented() : void{
 		$segmenter = new Segmenter(8);
 
-		self::assertFalse($segmenter->isFragmentationRequired("12345678"));
 		self::assertCount(1, $segmenter->segment("12345678"));
 		self::assertCount(2, $segmenter->segment("123456789"));
 	}
@@ -159,7 +158,6 @@ final class FramingTest extends TestCase{
 			//expected
 		}
 
-		self::assertFalse($assembler->isAssembling());
 		self::assertSame("cc", $assembler->accept(chr(0) . "cc"));
 	}
 

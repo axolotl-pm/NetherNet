@@ -21,6 +21,7 @@ use pmmp\encoding\DataDecodeException;
 use pmmp\encoding\VarInt;
 use pocketmine\nethernet\info\GameType;
 use pocketmine\nethernet\info\ServerInfo;
+use pocketmine\nethernet\signaling\lan\packet\DiscoveryException;
 use function strlen;
 
 /**

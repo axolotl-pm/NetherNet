@@ -14,16 +14,19 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\http;
 
-use pocketmine\nethernet\NetherNetException;
+use pocketmine\nethernet\signaling\SignalingException;
 
-class HttpException extends NetherNetException{
+/**
+ * A request that cannot be served, carrying the status to answer it with.
+ */
+class HttpException extends SignalingException{
 
 	public function __construct(
-		private readonly int $statusCode,
+		private readonly HttpStatus $status,
 		string $message
 	){
 		parent::__construct($message);
 	}
 
-	public function getStatusCode() : int{ return $this->statusCode; }
+	public function getStatus() : HttpStatus{ return $this->status; }
 }

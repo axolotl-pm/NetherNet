@@ -15,6 +15,8 @@ declare(strict_types=1);
 namespace pocketmine\nethernet\signaling\lan;
 
 use PHPUnit\Framework\TestCase;
+use pocketmine\nethernet\signaling\lan\packet\DiscoveryCipher;
+use pocketmine\nethernet\signaling\lan\packet\DiscoveryException;
 use pocketmine\nethernet\signaling\lan\packet\MessagePacket;
 use pocketmine\nethernet\signaling\lan\packet\PacketSerializer;
 use pocketmine\nethernet\signaling\lan\packet\PacketType;
@@ -57,7 +59,7 @@ final class PacketTest extends TestCase{
 	 * which would otherwise show up only as a peer that never answers.
 	 */
 	public function testRequestPlaintextMatchesTheReferenceLayout() : void{
-		$frame = PacketSerializer::encode(new RequestPacket(), self::SENDER_ID);
+		$frame = PacketSerializer::encode(new RequestPacket(self::SENDER_ID));
 
 		//32 bytes of checksum, then 20 bytes of plaintext padded to two blocks
 		self::assertSame(64, strlen($frame));
@@ -69,7 +71,7 @@ final class PacketTest extends TestCase{
 
 	/** The length field counts the whole plaintext, including itself. */
 	public function testLengthPrefixCountsItself() : void{
-		$frame = PacketSerializer::encode(new RequestPacket(), self::SENDER_ID);
+		$frame = PacketSerializer::encode(new RequestPacket(self::SENDER_ID));
 		$plaintext = openssl_decrypt(substr($frame, 32), "aes-256-ecb", DiscoveryCipher::key(), OPENSSL_RAW_DATA, "");
 
 		self::assertIsString($plaintext);
@@ -82,7 +84,7 @@ final class PacketTest extends TestCase{
 	 * produces datagrams that look right and are rejected by every real peer.
 	 */
 	public function testChecksumIsTakenOverThePlaintext() : void{
-		$frame = PacketSerializer::encode(new RequestPacket(), self::SENDER_ID);
+		$frame = PacketSerializer::encode(new RequestPacket(self::SENDER_ID));
 		$plaintext = openssl_decrypt(substr($frame, 32), "aes-256-ecb", DiscoveryCipher::key(), OPENSSL_RAW_DATA, "");
 
 		self::assertIsString($plaintext);
@@ -93,11 +95,11 @@ final class PacketTest extends TestCase{
 	}
 
 	public function testRequestSurvivesTheRoundTrip() : void{
-		[$packet, $senderId] = PacketSerializer::decode(PacketSerializer::encode(new RequestPacket(), self::SENDER_ID));
+		$packet = PacketSerializer::decode(PacketSerializer::encode(new RequestPacket(self::SENDER_ID)));
 
 		self::assertInstanceOf(RequestPacket::class, $packet);
 		self::assertSame(PacketType::REQUEST, $packet->getType());
-		self::assertSame(self::SENDER_ID, $senderId);
+		self::assertSame(self::SENDER_ID, $packet->senderId);
 	}
 
 	/**
@@ -105,7 +107,7 @@ final class PacketTest extends TestCase{
 	 * in the protocol, and treating both alike breaks one of them.
 	 */
 	public function testResponsePayloadIsHexEncodedOnTheWire() : void{
-		$frame = PacketSerializer::encode(new ResponsePacket("\x01\x02\xab"), self::SENDER_ID);
+		$frame = PacketSerializer::encode(new ResponsePacket(self::SENDER_ID, "\x01\x02\xab"));
 		$plaintext = openssl_decrypt(substr($frame, 32), "aes-256-ecb", DiscoveryCipher::key(), OPENSSL_RAW_DATA, "");
 		self::assertIsString($plaintext);
 
@@ -115,7 +117,7 @@ final class PacketTest extends TestCase{
 	}
 
 	public function testMessagePayloadIsSentRaw() : void{
-		$frame = PacketSerializer::encode(new MessagePacket(0xAABBCCDD, "CONNECTREQUEST 42 hi"), self::SENDER_ID);
+		$frame = PacketSerializer::encode(new MessagePacket(self::SENDER_ID, 0xAABBCCDD, "CONNECTREQUEST 42 hi"));
 		$plaintext = openssl_decrypt(substr($frame, 32), "aes-256-ecb", DiscoveryCipher::key(), OPENSSL_RAW_DATA, "");
 		self::assertIsString($plaintext);
 
@@ -126,14 +128,14 @@ final class PacketTest extends TestCase{
 
 	public function testResponseSurvivesTheRoundTrip() : void{
 		$payload = "\x00\xff\x10binary\x00";
-		[$packet] = PacketSerializer::decode(PacketSerializer::encode(new ResponsePacket($payload), self::SENDER_ID));
+		$packet = PacketSerializer::decode(PacketSerializer::encode(new ResponsePacket(self::SENDER_ID, $payload)));
 
 		self::assertInstanceOf(ResponsePacket::class, $packet);
 		self::assertSame($payload, $packet->applicationData);
 	}
 
 	public function testMessageSurvivesTheRoundTrip() : void{
-		[$packet] = PacketSerializer::decode(PacketSerializer::encode(new MessagePacket(0xAABBCCDD, "hello there"), self::SENDER_ID));
+		$packet = PacketSerializer::decode(PacketSerializer::encode(new MessagePacket(self::SENDER_ID, 0xAABBCCDD, "hello there")));
 
 		self::assertInstanceOf(MessagePacket::class, $packet);
 		self::assertSame(0xAABBCCDD, $packet->recipientId);
@@ -146,14 +148,14 @@ final class PacketTest extends TestCase{
 	 */
 	public function testSenderIdAboveTheSignedRangeRoundTrips() : void{
 		$senderId = -1; //0xFFFFFFFFFFFFFFFF as PHP sees it
-		[, $decoded] = PacketSerializer::decode(PacketSerializer::encode(new RequestPacket(), $senderId));
+		$decoded = PacketSerializer::decode(PacketSerializer::encode(new RequestPacket($senderId)))->senderId;
 
 		self::assertSame($senderId, $decoded);
 		self::assertSame("18446744073709551615", sprintf("%u", $decoded));
 	}
 
 	public function testTamperedFrameIsRejected() : void{
-		$frame = PacketSerializer::encode(new RequestPacket(), self::SENDER_ID);
+		$frame = PacketSerializer::encode(new RequestPacket(self::SENDER_ID));
 		$tampered = substr($frame, 0, 40) . chr(ord($frame[40]) ^ 0xff) . substr($frame, 41);
 
 		$this->expectException(DiscoveryException::class);
@@ -223,7 +225,7 @@ final class PacketTest extends TestCase{
 			$declared .
 			$rest;
 
-		[$packet] = PacketSerializer::decode(DiscoveryCipher::seal(pack("v", strlen($body) + 2) . $body));
+		$packet = PacketSerializer::decode(DiscoveryCipher::seal(pack("v", strlen($body) + 2) . $body));
 
 		self::assertInstanceOf(MessagePacket::class, $packet);
 		self::assertSame($declared . $rest, $packet->data);
@@ -239,7 +241,7 @@ final class PacketTest extends TestCase{
 			$plaintext = hex2bin($prefix . "0000" . "8070605040302010" . str_repeat("00", 8));
 			self::assertIsString($plaintext);
 
-			[$packet] = PacketSerializer::decode(DiscoveryCipher::seal($plaintext));
+			$packet = PacketSerializer::decode(DiscoveryCipher::seal($plaintext));
 			self::assertInstanceOf(RequestPacket::class, $packet);
 		}
 	}

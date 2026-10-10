@@ -12,7 +12,7 @@
 
 declare(strict_types=1);
 
-namespace pocketmine\nethernet\signaling\lan;
+namespace pocketmine\nethernet\signaling\lan\packet;
 
 use function hash;
 use function hash_equals;

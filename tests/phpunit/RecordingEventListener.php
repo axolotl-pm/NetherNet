@@ -25,7 +25,7 @@ use pocketmine\nethernet\utils\InternetAddress;
  */
 final class RecordingEventListener implements ServerEventListener{
 
-	/** @phpstan-var list<array{int, string, InternetAddress, ?PeerIdentity}> */
+	/** @phpstan-var list<array{int, string, InternetAddress, ?string, ?PeerIdentity}> */
 	public array $opened = [];
 	/** @phpstan-var list<array{int, string, Reliability}> */
 	public array $packets = [];
@@ -42,13 +42,19 @@ final class RecordingEventListener implements ServerEventListener{
 	public bool $accepting = true;
 	public ?\Throwable $failOpenWith = null;
 
+	/** @phpstan-var (\Closure(int) : void)|null */
+	public ?\Closure $onOpen = null;
+
 	/** @phpstan-var (\Closure(int, string) : void)|null */
 	public ?\Closure $onPacket = null;
 
-	public function onSessionOpen(int $sessionId, string $networkId, InternetAddress $address, ?PeerIdentity $identity) : void{
-		$this->opened[] = [$sessionId, $networkId, $address, $identity];
+	public function onSessionOpen(int $sessionId, string $networkId, InternetAddress $address, ?string $clientAddress, ?PeerIdentity $identity) : void{
+		$this->opened[] = [$sessionId, $networkId, $address, $clientAddress, $identity];
 		if($this->failOpenWith !== null){
 			throw $this->failOpenWith;
+		}
+		if($this->onOpen !== null){
+			($this->onOpen)($sessionId);
 		}
 	}
 

@@ -20,6 +20,7 @@ use function strlen;
 use function substr;
 
 /**
+ * @internal
  * Splits message payloads into framed data channel fragments prefixed with a 1-byte countdown header.
  */
 final class Segmenter{
@@ -45,12 +46,6 @@ final class Segmenter{
 	}
 
 	public function getMaxSegmentPayloadSize() : int{ return $this->maxSegmentPayloadSize; }
-
-	public function getMaxPayloadSize() : int{ return $this->maxSegmentPayloadSize * self::MAX_SEGMENTS; }
-
-	public function isFragmentationRequired(string $payload) : bool{
-		return strlen($payload) > $this->maxSegmentPayloadSize;
-	}
 
 	/**
 	 * Fragments a payload into prefixed chunks carrying countdown headers (`N-1` down to `0x00`).

@@ -42,7 +42,6 @@ final class SessionTest extends TestCase{
 			7,
 			$this->transport,
 			new ChannelPair($this->reliable, $this->unreliable),
-			"1234",
 			new InternetAddress("192.0.2.10", 5000, 4),
 			null,
 			new Segmenter($segmentPayloadSize),

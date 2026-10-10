@@ -31,6 +31,12 @@ final class WebRtcTransportFactory implements PeerTransportFactory{
 	public const MAX_MTU = 4144;
 
 	/**
+	 * The connection's own receive queues are given this many times the budget, so that a session over budget is
+	 * still there to be closed with the reason, rather than the connection dropping what it could not queue.
+	 */
+	private const RECEIVE_QUEUE_MARGIN = 2;
+
+	/**
 	 * @phpstan-param list<IceServer> $iceServers
 	 */
 	public function __construct(
@@ -69,9 +75,9 @@ final class WebRtcTransportFactory implements PeerTransportFactory{
 		// Options are created per connection because PeerConnectionOptions setters mutate the instance in place.
 		$options = PeerConnectionOptions::create()
 			->setMaxMessageSize($budget->maxMessageSize)
-			->setMaxReceiveQueueSize($budget->getNativeReceiveQueueSize())
-			->setMaxReceiveQueueMessages($budget->getNativeReceiveQueueMessages())
-			->setMaxSendQueueSize($budget->getNativeSendQueueSize())
+			->setMaxReceiveQueueSize($budget->maxReceiveQueueSize * self::RECEIVE_QUEUE_MARGIN)
+			->setMaxReceiveQueueMessages($budget->maxReceiveQueueMessages * self::RECEIVE_QUEUE_MARGIN)
+			->setMaxSendQueueSize($budget->maxSendQueueSize)
 			->setMaxPendingDataChannels($budget->maxPendingDataChannels)
 			->setIceTcpEnabled(false)
 			->setIceUdpMuxEnabled($this->iceUdpMuxEnabled)

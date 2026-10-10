@@ -23,7 +23,8 @@ use pocketmine\nethernet\protocol\Reliability;
 interface ServerInterface{
 
 	/**
-	 * @throws \InvalidArgumentException if the payload is too large for the chosen reliability
+	 * A payload too large to send closes the session with {@link DisconnectReason::SEND_FAILED} if it was to be
+	 * reliable, and is dropped if it was not.
 	 */
 	public function sendPacket(int $sessionId, string $payload, Reliability $reliability = Reliability::RELIABLE, ?int $receiptId = null) : void;
 
@@ -33,11 +34,12 @@ interface ServerInterface{
 	public function closeSession(int $sessionId, DisconnectReason $reason = DisconnectReason::SERVER_DISCONNECT) : void;
 
 	/**
+	 * Refuses new connections from the address and disconnects the sessions that either connect from it or were
+	 * signaled from it.
+	 *
 	 * @param int $timeout Seconds until the address is unblocked, or -1 to block it until unblockAddress() is called.
 	 */
 	public function blockAddress(string $address, int $timeout = 300) : void;
 
 	public function unblockAddress(string $address) : void;
-
-	public function setPacketsPerTickLimit(int $limit) : void;
 }

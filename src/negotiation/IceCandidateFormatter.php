@@ -21,55 +21,47 @@ use function array_map;
 use function array_merge;
 use function array_unique;
 use function array_values;
-use function count;
-use function explode;
-use function filter_var;
-use function implode;
 use function in_array;
 use function str_starts_with;
-use function strtolower;
+use function strlen;
 use function substr;
-use const FILTER_FLAG_IPV6;
-use const FILTER_VALIDATE_IP;
 
 /**
+ * @internal
  * Formats ICE candidate strings to match NetherNet and Minecraft WebRTC attribute expectations.
  */
 final class IceCandidateFormatter{
 
-	private const COMPONENT = "1";
-
-	/**
-	 * RFC 8445 section 5.1.2.1 priority for a server-reflexive candidate
-	 */
-	private const SERVER_REFLEXIVE_PRIORITY = (100 << 24) + (65535 << 8) + 255;
+	private const PREFIX = "candidate:";
 
 	private function __construct(){}
 
 	/**
 	 * Builds a server-reflexive candidate
 	 *
+	 * @param string $address IP address in canonical form
+	 *
 	 * @return string|null null when the offer already carries the address, or has no UDP host candidate.
 	 */
 	public static function signalingPeer(SessionDescription $offer, string $address) : ?string{
 		$port = null;
-		foreach(array_merge($offer->getSessionAttributeValues("candidate"), $offer->getMediaAttributeValues("candidate")) as $candidate){
-			$parts = explode(" ", $candidate);
-			if(count($parts) < 8 || $parts[6] !== "typ"){
+		foreach(array_merge($offer->getSessionAttributeValues("candidate"), $offer->getMediaAttributeValues("candidate")) as $value){
+			$candidate = IceCandidate::parse($value);
+			if($candidate === null){
 				continue;
 			}
-			if($parts[4] === $address){
+			if((InternetAddress::normalizeIp($candidate->address) ?? $candidate->address) === $address){
 				return null;
 			}
-			if($port === null && $parts[7] === "host" && strtolower($parts[2]) === "udp"){
-				$port = $parts[5];
+			if($port === null && $candidate->isUdpHost()){
+				$port = $candidate->port;
 			}
 		}
 		if($port === null){
 			return null;
 		}
 
-		return "candidate:" . self::serverReflexive("signaling", $address, $port);
+		return self::PREFIX . IceCandidate::serverReflexive("signaling", $address, $port)->toString();
 	}
 
 	/**
@@ -90,17 +82,17 @@ final class IceCandidateFormatter{
 		$kept = [];
 		$matchedAddresses = [];
 		$port = null;
-		foreach($candidates as $candidate){
-			$parts = explode(" ", $candidate);
-			if(count($parts) < 8 || $parts[6] !== "typ"){
+		foreach($candidates as $value){
+			$candidate = IceCandidate::parse($value);
+			if($candidate === null){
 				continue;
 			}
-			if($port === null && $parts[7] === "host" && strtolower($parts[2]) === "udp"){
-				$port = $parts[5];
+			if($port === null && $candidate->isUdpHost()){
+				$port = $candidate->port;
 			}
-			$address = InternetAddress::normalizeIp($parts[4]) ?? $parts[4];
+			$address = InternetAddress::normalizeIp($candidate->address) ?? $candidate->address;
 			if(in_array($address, $addresses, true)){
-				$kept[] = $candidate;
+				$kept[] = $value;
 				$matchedAddresses[$address] = true;
 			}
 		}
@@ -110,7 +102,7 @@ final class IceCandidateFormatter{
 
 		foreach($addresses as $address){
 			if(!isset($matchedAddresses[$address])){
-				$kept[] = self::serverReflexive("advertised", $address, $port);
+				$kept[] = IceCandidate::serverReflexive("advertised", $address, $port)->toString();
 			}
 		}
 
@@ -118,76 +110,23 @@ final class IceCandidateFormatter{
 	}
 
 	/**
-	 * Builds a server-reflexive candidate attribute value with an unknown base, as `raddr 0.0.0.0 rport 0`
-	 * (`raddr :: rport 0` for IPv6).
-	 */
-	private static function serverReflexive(string $foundation, string $address, string $port) : string{
-		return implode(" ", [
-			$foundation,
-			self::COMPONENT,
-			"udp",
-			(string) self::SERVER_REFLEXIVE_PRIORITY,
-			$address,
-			$port,
-			"typ",
-			"srflx",
-			"raddr",
-			self::unspecifiedAddressFor($address),
-			"rport",
-			"0"
-		]);
-	}
-
-	private static function unspecifiedAddressFor(string $address) : string{
-		return filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false ? "::" : "0.0.0.0";
-	}
-
-	/**
+	 * Returns a gathered candidate in the form it is signaled to a client in.
+	 *
 	 * @throws NegotiationException
 	 */
 	public static function format(string $candidate, string $ufrag, int $index) : string{
 		if(str_starts_with($candidate, "a=")){
 			$candidate = substr($candidate, 2);
 		}
-		if(!str_starts_with($candidate, "candidate:")){
-			throw new NegotiationException("Candidate does not start with \"candidate:\": $candidate", ErrorCode::CANDIDATE_ADD);
+		if(!str_starts_with($candidate, self::PREFIX)){
+			throw new NegotiationException("Candidate does not start with \"" . self::PREFIX . "\": $candidate", ErrorCode::CANDIDATE_ADD);
 		}
 
-		$parts = explode(" ", substr($candidate, 10));
-		if(count($parts) < 8 || $parts[6] !== "typ"){
+		$parsed = IceCandidate::parse(substr($candidate, strlen(self::PREFIX)));
+		if($parsed === null){
 			throw new NegotiationException("Candidate is not in the expected form: $candidate", ErrorCode::CANDIDATE_ADD);
 		}
 
-		[$foundation, , $protocol, $priority, $address, $port, , $type] = $parts;
-
-		$formatted = [
-			"candidate:" . $foundation,
-			self::COMPONENT,
-			$protocol,
-			$priority,
-			$address,
-			$port,
-			"typ",
-			$type
-		];
-
-		// Zero reflexive/relayed base addresses for privacy while satisfying expected format
-		if($type === "relay" || $type === "srflx"){
-			$formatted[] = "raddr";
-			$formatted[] = self::unspecifiedAddressFor($address);
-			$formatted[] = "rport";
-			$formatted[] = "0";
-		}
-
-		$formatted[] = "generation";
-		$formatted[] = "0";
-		$formatted[] = "ufrag";
-		$formatted[] = $ufrag;
-		$formatted[] = "network-id";
-		$formatted[] = (string) $index;
-		$formatted[] = "network-cost";
-		$formatted[] = "0";
-
-		return implode(" ", $formatted);
+		return self::PREFIX . $parsed->toString() . " generation 0 ufrag $ufrag network-id $index network-cost 0";
 	}
 }

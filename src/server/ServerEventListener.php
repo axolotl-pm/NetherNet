@@ -22,9 +22,16 @@ use pocketmine\nethernet\utils\InternetAddress;
 interface ServerEventListener{
 
 	/**
+	 * The session can be turned away from here with {@link ServerInterface::closeSession()}; it is then reported to
+	 * onSessionClose() like any other, without any of its packets having been delivered.
 	 * If this throws, the session is closed without onSessionClose() being called.
+	 *
+	 * @param InternetAddress $address       Where the transport reaches the peer; a relay's address if it connects through one.
+	 * @param string|null     $clientAddress IPv4 or IPv6 address the offer was signaled from, or the one a trusted
+	 *                                       reverse proxy named, where the signaling transport knew it. Always in
+	 *                                       canonical form: unbracketed, IPv6 lowercase and zero-compressed.
 	 */
-	public function onSessionOpen(int $sessionId, string $networkId, InternetAddress $address, ?PeerIdentity $identity) : void;
+	public function onSessionOpen(int $sessionId, string $networkId, InternetAddress $address, ?string $clientAddress, ?PeerIdentity $identity) : void;
 
 	public function onSessionClose(int $sessionId, DisconnectReason $reason) : void;
 

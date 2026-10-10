@@ -14,7 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\session;
 
-use pocketmine\nethernet\identity\PeerIdentity;
 use pocketmine\nethernet\protocol\DisconnectReason;
 use pocketmine\nethernet\protocol\framing\Assembler;
 use pocketmine\nethernet\protocol\framing\FramingException;
@@ -65,9 +64,8 @@ final class Session{
 		private readonly int $id,
 		private readonly PeerTransport $transport,
 		private readonly ChannelPair $channels,
-		private readonly string $networkId,
 		private readonly InternetAddress $address,
-		private readonly ?PeerIdentity $identity,
+		private readonly ?string $clientAddress,
 		private readonly Segmenter $segmenter,
 		private readonly ConnectionBudgetConfiguration $budget
 	){
@@ -82,11 +80,9 @@ final class Session{
 
 	public function getId() : int{ return $this->id; }
 
-	public function getNetworkId() : string{ return $this->networkId; }
-
-	public function getIdentity() : ?PeerIdentity{ return $this->identity; }
-
 	public function getRemoteAddress() : InternetAddress{ return $this->address; }
+
+	public function getClientAddress() : ?string{ return $this->clientAddress; }
 
 	public function isConnected() : bool{ return $this->state === SessionState::CONNECTED; }
 
@@ -164,12 +160,7 @@ final class Session{
 		return $acknowledged;
 	}
 
-	public function getBufferedAmount(Reliability $reliability = Reliability::RELIABLE) : int{
-		return $this->isFullyDisconnected() ? 0 : $this->channels->get($reliability)->getBufferedAmount();
-	}
-
 	/**
-	 * @internal
 	 * @throws SessionException
 	 */
 	public function receive() : ?ReceivedMessage{
@@ -221,7 +212,6 @@ final class Session{
 		return $this->reportedPing = $ping;
 	}
 
-	/** @internal */
 	public function update(float $now) : void{
 		if($this->state === SessionState::DISCONNECTED){
 			return;
