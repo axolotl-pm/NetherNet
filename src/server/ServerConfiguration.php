@@ -16,7 +16,6 @@ namespace pocketmine\nethernet\server;
 
 use pocketmine\nethernet\identity\AssertionIdentityVerifier;
 use pocketmine\nethernet\identity\IdentityProvider;
-use pocketmine\nethernet\identity\IdentityVerifier;
 use pocketmine\nethernet\negotiation\TransportNegotiator;
 use pocketmine\nethernet\transport\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\transport\PeerTransportFactory;
@@ -31,7 +30,7 @@ final class ServerConfiguration{
 	/**
 	 * @param IdentityProvider              $identityProvider    Issues server identity assertions (`a=identity`) for SDP answers.
 	 * @param \Logger                       $logger              Receives the server's diagnostics.
-	 * @param IdentityVerifier              $identityVerifier    Verifies connecting client identity assertions and GameServerTokens.
+	 * @param AssertionIdentityVerifier     $identityVerifier    Verifies connecting client identity assertions and GameServerTokens.
 	 * @param PeerTransportFactory          $transportFactory    Creates the transport for each connecting peer.
 	 * @param ConnectionBudgetConfiguration $budget              Resource limits and queue thresholds for peer connections.
 	 * @param float                         $gatheringTimeout    Timeout in seconds for ICE candidate gathering.
@@ -45,7 +44,7 @@ final class ServerConfiguration{
 	public function __construct(
 		public readonly IdentityProvider $identityProvider,
 		public readonly \Logger $logger,
-		public readonly IdentityVerifier $identityVerifier = new AssertionIdentityVerifier(),
+		public readonly AssertionIdentityVerifier $identityVerifier = new AssertionIdentityVerifier(),
 		public readonly PeerTransportFactory $transportFactory = new WebRtcTransportFactory(),
 		public readonly ConnectionBudgetConfiguration $budget = new ConnectionBudgetConfiguration(),
 		public readonly float $gatheringTimeout = self::DEFAULT_GATHERING_TIMEOUT,

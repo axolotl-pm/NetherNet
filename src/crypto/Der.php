@@ -19,6 +19,9 @@ use function ltrim;
 use function pack;
 use function strlen;
 
+/**
+ * @internal
+ */
 final class Der{
 
 	private const MAX_LENGTH = 0xffffffff;
@@ -27,38 +30,39 @@ final class Der{
 		//NOOP
 	}
 
-	/**
-	 * @throws CryptoException
-	 */
 	public static function encode(int $tag, string $body) : string{
 		return chr($tag) . self::length(strlen($body)) . $body;
 	}
 
-	/**
-	 * @throws CryptoException
-	 */
 	public static function sequence(string $body) : string{
 		return self::encode(0x30, $body);
 	}
 
 	/**
-	 * @throws CryptoException
+	 * @param string $body Two's complement big-endian value, exactly as it is to appear
 	 */
 	public static function integer(string $body) : string{
 		return self::encode(0x02, $body);
 	}
 
 	/**
-	 * @throws CryptoException
+	 * Encodes an unsigned big-endian value as the shortest INTEGER that stays positive.
 	 */
+	public static function unsignedInteger(string $value) : string{
+		$value = ltrim($value, "\x00");
+		if($value === "" || ($value[0] & "\x80") !== "\x00"){
+			$value = "\x00" . $value;
+		}
+
+		return self::integer($value);
+	}
+
 	public static function octetString(string $body) : string{
 		return self::encode(0x04, $body);
 	}
 
 	/**
 	 * Encodes a byte-aligned BIT STRING with zero unused bits.
-	 *
-	 * @throws CryptoException
 	 */
 	public static function bitString(string $body) : string{
 		return self::encode(0x03, "\x00" . $body);
@@ -66,22 +70,17 @@ final class Der{
 
 	/**
 	 * Encodes a context-specific constructed tag (e.g. for optional SEC1 structures).
-	 *
-	 * @throws CryptoException
 	 */
 	public static function tagged(int $number, string $body) : string{
 		return self::encode(0xa0 | $number, $body);
 	}
 
-	/**
-	 * @throws CryptoException
-	 */
 	private static function length(int $length) : string{
 		if($length <= 0x7f){
 			return chr($length);
 		}
 		if($length > self::MAX_LENGTH){
-			throw new CryptoException("DER body of $length bytes is too long to encode");
+			throw new \InvalidArgumentException("DER body of $length bytes is too long to encode");
 		}
 
 		$bytes = ltrim(pack("N", $length), "\x00");

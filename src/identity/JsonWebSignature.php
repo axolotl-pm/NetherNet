@@ -16,105 +16,54 @@ namespace pocketmine\nethernet\identity;
 
 use pocketmine\nethernet\crypto\Base64Url;
 use pocketmine\nethernet\crypto\CryptoException;
-use pocketmine\nethernet\crypto\EcdsaSignature;
-use pocketmine\nethernet\crypto\OpenSsl;
+use pocketmine\nethernet\crypto\Es384;
 use function count;
 use function explode;
-use function is_array;
-use function json_decode;
-use function openssl_sign;
-use function openssl_verify;
-use const OPENSSL_ALGO_SHA384;
 
 /**
- * Handles creation and verification of ES384 JWS tokens and detached signatures.
+ * Detached ES384 JWS signatures (RFC 7515 Appendix F).
  */
 final class JsonWebSignature{
 
-	public const ALGORITHM = "ES384";
+	public const ALGORITHM = Es384::ALGORITHM;
 
-	/**
-	 * Canonical protected header for ES384 JWS signatures.
-	 */
-	private const PROTECTED_HEADER = '{"alg":"ES384"}';
+	private const PROTECTED_HEADER = '{"alg":"' . self::ALGORITHM . '"}';
 
-	private function __construct(){}
-
-	/**
-	 * @throws CryptoException
-	 */
-	public static function signRaw(string $signingInput, \OpenSSLAsymmetricKey $privateKey) : string{
-		$der = "";
-		if(!openssl_sign($signingInput, $der, $privateKey, OPENSSL_ALGO_SHA384)){
-			throw new CryptoException("OpenSSL failed to sign: " . OpenSsl::lastError());
-		}
-
-		return EcdsaSignature::derToJose($der);
+	private function __construct(){
+		//NOOP
 	}
 
 	/**
-	 * Verifies an ES384 signature over raw signing input.
-	 *
-	 * @throws CryptoException
+	 * @throws IdentityException
 	 */
-	public static function verifyRaw(string $signingInput, string $signature, PublicKey $publicKey) : bool{
-		$result = openssl_verify(
-			$signingInput,
-			EcdsaSignature::joseToDer($signature),
-			$publicKey->getOpenSslKey(),
-			OPENSSL_ALGO_SHA384
-		);
-
-		return match($result){
-			1 => true,
-			0 => false,
-			default => throw new CryptoException("OpenSSL failed to verify: " . OpenSsl::lastError())
-		};
-	}
-
-	/**
-	 * Produces a detached JWS signature (RFC 7515 Appendix F) over the payload.
-	 *
-	 * @throws CryptoException
-	 */
-	public static function signDetached(string $payload, \OpenSSLAsymmetricKey $privateKey) : string{
+	public static function signDetached(string $payload, ServerIdentity $signer) : string{
 		$header = Base64Url::encode(self::PROTECTED_HEADER);
-		$signature = self::signRaw($header . "." . Base64Url::encode($payload), $privateKey);
 
-		return $header . ".." . Base64Url::encode($signature);
+		return $header . ".." . Base64Url::encode($signer->sign($header . "." . Base64Url::encode($payload)));
 	}
 
 	/**
-	 * @throws CryptoException
+	 * @throws IdentityException if the signature is not a detached ES384 JWS
 	 */
 	public static function verifyDetached(string $detached, string $payload, PublicKey $publicKey) : bool{
 		$parts = explode(".", $detached, limit: 4);
 		if(count($parts) !== 3){
-			throw new CryptoException("Detached signature must consist of exactly three dot-separated parts, got " . count($parts));
+			throw new IdentityException("Detached signature must consist of exactly three dot-separated parts, got " . count($parts));
 		}
 		if($parts[1] !== ""){
-			throw new CryptoException("Detached signature must not carry a payload");
+			throw new IdentityException("Detached signature must not carry a payload");
 		}
 
-		self::checkAlgorithm($parts[0]);
-
-		return self::verifyRaw(
-			$parts[0] . "." . Base64Url::encode($payload),
-			Base64Url::decode($parts[2]),
-			$publicKey
-		);
-	}
-
-	/**
-	 * @throws CryptoException
-	 */
-	private static function checkAlgorithm(string $encodedHeader) : void{
-		$decoded = json_decode(Base64Url::decode($encodedHeader), associative: true);
-		if(!is_array($decoded)){
-			throw new CryptoException("Detached signature header is not a JSON object");
+		try{
+			$header = Json::decodeObject(Base64Url::decode($parts[0]), "detached signature header");
+			$signature = Base64Url::decode($parts[2]);
+		}catch(CryptoException $e){
+			throw new IdentityException("Detached signature is not valid base64url", 0, $e);
 		}
-		if(($decoded["alg"] ?? null) !== self::ALGORITHM){
-			throw new CryptoException("Detached signature must use " . self::ALGORITHM);
+		if(($header["alg"] ?? null) !== self::ALGORITHM){
+			throw new IdentityException("Detached signature must use " . self::ALGORITHM);
 		}
+
+		return $publicKey->verify($parts[0] . "." . Base64Url::encode($payload), $signature);
 	}
 }

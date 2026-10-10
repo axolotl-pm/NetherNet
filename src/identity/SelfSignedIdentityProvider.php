@@ -14,22 +14,24 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\identity;
 
-use pocketmine\nethernet\crypto\CryptoException;
 use pocketmine\nethernet\sdp\Fingerprint;
+use function time;
 
 /**
- * Generates self-signed server identity assertions (`a=identity`) for SDP answers.
+ * Issues assertions whose token the host signs itself, so they vouch for nothing but the host's key.
  */
 final class SelfSignedIdentityProvider implements IdentityProvider{
 
+	public const DEFAULT_DOMAIN = "self";
+	public const DEFAULT_TOKEN_LIFETIME = 60;
+
 	/**
-	 * @param string $domain               Partner domain identifier advertised in the `idp` object (default "self").
-	 * @param int    $tokenLifetimeSeconds Validity lifetime for the issued Server Identity JWT in seconds.
+	 * @param string $domain Domain advertised in the assertion's `idp` object.
 	 */
 	public function __construct(
 		private readonly ServerIdentity $identity,
-		private readonly string $domain = "self",
-		private readonly int $tokenLifetimeSeconds = 60
+		private readonly string $domain = self::DEFAULT_DOMAIN,
+		private readonly int $tokenLifetimeSeconds = self::DEFAULT_TOKEN_LIFETIME
 	){
 		if($domain === ""){
 			throw new \InvalidArgumentException("Identity provider domain must not be empty");
@@ -39,16 +41,24 @@ final class SelfSignedIdentityProvider implements IdentityProvider{
 		}
 	}
 
-	/**
-	 * @throws CryptoException
-	 */
 	public function issue(Fingerprint $localFingerprint) : IdentityAssertion{
-		$privateKey = $this->identity->getPrivateKey();
+		$issuedAt = time();
+		$encodedKey = $this->identity->getPublicKey()->toBase64Der();
+
+		$token = JsonWebToken::create(
+			[JsonWebToken::HEADER_PUBLIC_KEY => $encodedKey],
+			[
+				JsonWebToken::CLAIM_EXPIRY => $issuedAt + $this->tokenLifetimeSeconds,
+				JsonWebToken::CLAIM_ISSUED_AT => $issuedAt,
+				JsonWebToken::CLAIM_PUBLIC_KEY => $encodedKey
+			],
+			$this->identity
+		);
 
 		return IdentityAssertion::create(
 			$this->domain,
-			JsonWebToken::sign($this->identity->getPublicKey(), $privateKey, $this->tokenLifetimeSeconds),
-			JsonWebSignature::signDetached($localFingerprint->toCanonicalPayload(), $privateKey)
+			$token,
+			JsonWebSignature::signDetached($localFingerprint->toCanonicalPayload(), $this->identity)
 		);
 	}
 }

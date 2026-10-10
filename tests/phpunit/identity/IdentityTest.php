@@ -22,6 +22,7 @@ use function base64_encode;
 use function json_decode;
 use function json_encode;
 use function openssl_pkey_get_details;
+use function openssl_pkey_new;
 use function str_pad;
 use function strlen;
 use function substr;
@@ -42,7 +43,8 @@ final class IdentityTest extends TestCase{
 		$identity = ServerIdentity::generate();
 		$assertion = (new SelfSignedIdentityProvider($identity, "self"))->issue(self::fingerprint());
 
-		self::assertTrue($assertion->verifyFingerprint(self::fingerprint())->equals($identity->getPublicKey()));
+		$assertion->verifyFingerprint(self::fingerprint());
+		self::assertTrue($assertion->getToken()->getPublicKey()->equals($identity->getPublicKey()));
 	}
 
 	/**
@@ -52,7 +54,7 @@ final class IdentityTest extends TestCase{
 	public function testAssertionForADifferentFingerprintIsRefused() : void{
 		$assertion = (new SelfSignedIdentityProvider(ServerIdentity::generate()))->issue(self::fingerprint());
 
-		$this->expectException(\pocketmine\nethernet\crypto\CryptoException::class);
+		$this->expectException(IdentityException::class);
 		$assertion->verifyFingerprint(new Fingerprint("sha-256", "FF:FF:FF:FF"));
 	}
 
@@ -64,8 +66,9 @@ final class IdentityTest extends TestCase{
 
 		self::assertSame("example.test", $parsed->getDomain());
 		self::assertSame(IdentityAssertion::PROTOCOL_DEFAULT, $parsed->getProtocol());
-		self::assertSame($original->getRawToken(), $parsed->getRawToken());
-		self::assertTrue($parsed->verifyFingerprint(self::fingerprint())->equals($identity->getPublicKey()));
+		self::assertSame($original->getToken()->toString(), $parsed->getToken()->toString());
+		$parsed->verifyFingerprint(self::fingerprint());
+		self::assertTrue($parsed->getToken()->getPublicKey()->equals($identity->getPublicKey()));
 	}
 
 	/**
@@ -95,7 +98,7 @@ final class IdentityTest extends TestCase{
 		$assertion = (new SelfSignedIdentityProvider(ServerIdentity::generate()))->issue(self::fingerprint());
 
 		$this->expectNotToPerformAssertions();
-		$assertion->getToken()->verifySelfSigned();
+		(new SelfSignedTokenVerifier())->check($assertion->getToken());
 	}
 
 	/**
@@ -119,7 +122,7 @@ final class IdentityTest extends TestCase{
 			"x" => Base64Url::encode(str_pad($details["ec"]["x"], 48, "\x00", STR_PAD_LEFT)),
 			"y" => Base64Url::encode(str_pad($details["ec"]["y"], 48, "\x00", STR_PAD_LEFT))
 		]);
-		$fromBase64 = PublicKey::fromClaim($expected->toCpk());
+		$fromBase64 = PublicKey::fromClaim($expected->toBase64Der());
 
 		self::assertTrue($fromJwk->equals($expected));
 		self::assertTrue($fromBase64->equals($expected));
@@ -129,7 +132,7 @@ final class IdentityTest extends TestCase{
 	 * @dataProvider unusableClaimProvider
 	 */
 	public function testUnusableCpkClaimIsRefused(mixed $claim) : void{
-		$this->expectException(\pocketmine\nethernet\crypto\CryptoException::class);
+		$this->expectException(IdentityException::class);
 		PublicKey::fromClaim($claim);
 	}
 
@@ -171,6 +174,7 @@ final class IdentityTest extends TestCase{
 		self::assertNotNull($verified);
 		self::assertTrue($verified->publicKey->equals($identity->getPublicKey()));
 		self::assertSame("example.test", $verified->providerDomain);
+		self::assertTrue($verified->token->getPublicKey()->equals($identity->getPublicKey()));
 	}
 
 	/**
@@ -221,11 +225,76 @@ final class IdentityTest extends TestCase{
 	}
 
 	/**
+	 * An expired token is a different problem from an unreadable one, and a host reading its logs needs to
+	 * be able to tell a stale client from a broken one.
+	 */
+	public function testExpiredTokenIsReportedAsExpired() : void{
+		$identity = ServerIdentity::generate();
+		$expired = JsonWebToken::create([], [
+			JsonWebToken::CLAIM_EXPIRY => time() - 3600,
+			JsonWebToken::CLAIM_PUBLIC_KEY => $identity->getPublicKey()->toBase64Der()
+		], $identity);
+		$assertion = IdentityAssertion::create("self", $expired, JsonWebSignature::signDetached(self::fingerprint()->toCanonicalPayload(), $identity));
+
+		try{
+			(new AssertionIdentityVerifier())->verify($assertion->encode(), self::fingerprint());
+			self::fail("an expired token was accepted");
+		}catch(IdentityException $e){
+			self::assertSame("Token has expired", $e->getMessage());
+		}
+	}
+
+	public function testTokenIsGoodUntilItsExpiryPlusTheLeeway() : void{
+		$identity = ServerIdentity::generate();
+		$token = JsonWebToken::create([], [
+			JsonWebToken::CLAIM_EXPIRY => 1_000_000,
+			JsonWebToken::CLAIM_PUBLIC_KEY => $identity->getPublicKey()->toBase64Der()
+		], $identity);
+
+		$token->checkTimestamps(1_000_000 + JsonWebToken::DEFAULT_LEEWAY_SECONDS - 1);
+
+		$this->expectException(IdentityException::class);
+		$token->checkTimestamps(1_000_000 + JsonWebToken::DEFAULT_LEEWAY_SECONDS);
+	}
+
+	public function testTokenFromTheFutureIsRefused() : void{
+		$identity = ServerIdentity::generate();
+		$token = JsonWebToken::create([], [
+			JsonWebToken::CLAIM_NOT_BEFORE => 2_000_000,
+			JsonWebToken::CLAIM_PUBLIC_KEY => $identity->getPublicKey()->toBase64Der()
+		], $identity);
+
+		$token->checkTimestamps(2_000_000 - JsonWebToken::DEFAULT_LEEWAY_SECONDS);
+
+		$this->expectException(IdentityException::class);
+		$this->expectExceptionMessage("not valid yet");
+		$token->checkTimestamps(2_000_000 - JsonWebToken::DEFAULT_LEEWAY_SECONDS - 1);
+	}
+
+	public function testUnreadableAssertionIsReportedAsMalformed() : void{
+		$this->expectException(IdentityException::class);
+		$this->expectExceptionMessage("malformed");
+		(new AssertionIdentityVerifier())->verify(base64_encode("[1,2,3]"), self::fingerprint());
+	}
+
+	/**
+	 * Everything downstream labels its signatures ES384, so a key on any other curve would produce tokens that
+	 * claim an algorithm they were not made with.
+	 */
+	public function testKeyOnAnotherCurveIsRefused() : void{
+		$key = openssl_pkey_new(["ec" => ["curve_name" => "prime256v1"]]);
+		self::assertNotFalse($key);
+
+		$this->expectException(IdentityException::class);
+		PublicKey::fromOpenSslKey($key);
+	}
+
+	/**
 	 * A token whose signature is nothing but bytes, naming a key the peer holds. Only a
 	 * TokenVerifier stands between this and being taken at face value.
 	 */
 	private static function forgedToken(PublicKey $publicKey) : string{
-		$cpk = $publicKey->toCpk();
+		$cpk = $publicKey->toBase64Der();
 
 		$header = Base64Url::encode((string) json_encode(["alg" => JsonWebSignature::ALGORITHM, "x5u" => $cpk]));
 		$claims = Base64Url::encode((string) json_encode(["exp" => time() + 3600, "cpk" => $cpk, "xuid" => "2535000000000001"]));
@@ -236,8 +305,8 @@ final class IdentityTest extends TestCase{
 	private static function forgedAssertion(ServerIdentity $identity) : IdentityAssertion{
 		return IdentityAssertion::create(
 			"auth.minecraft.org",
-			self::forgedToken($identity->getPublicKey()),
-			JsonWebSignature::signDetached(self::fingerprint()->toCanonicalPayload(), $identity->getPrivateKey())
+			JsonWebToken::parse(self::forgedToken($identity->getPublicKey())),
+			JsonWebSignature::signDetached(self::fingerprint()->toCanonicalPayload(), $identity)
 		);
 	}
 

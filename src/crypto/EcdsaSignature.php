@@ -15,7 +15,6 @@ declare(strict_types=1);
 namespace pocketmine\nethernet\crypto;
 
 use function bin2hex;
-use function chr;
 use function ltrim;
 use function ord;
 use function str_pad;
@@ -24,14 +23,14 @@ use function strlen;
 use function substr;
 use const STR_PAD_LEFT;
 
+/**
+ * @internal
+ */
 final class EcdsaSignature{
-
-	public const P384_COORDINATE_SIZE = 48;
 
 	private const ASN1_INTEGER_TAG = "\x02";
 	private const ASN1_SEQUENCE_TAG = "\x30";
 	private const ASN1_LONG_FORM_FLAG = 0x80;
-	private const ASN1_INTEGER_SIGN_BIT = 0x80;
 
 	private function __construct(){}
 
@@ -40,7 +39,8 @@ final class EcdsaSignature{
 	 *
 	 * @throws CryptoException
 	 */
-	public static function derToJose(string $der, int $coordinateSize = self::P384_COORDINATE_SIZE) : string{
+	public static function derToJose(string $der) : string{
+		$coordinateSize = P384::COORDINATE_SIZE;
 		if(strlen($der) < 2 || $der[0] !== self::ASN1_SEQUENCE_TAG){
 			throw new CryptoException("Signature does not start with an ASN.1 SEQUENCE tag");
 		}
@@ -105,29 +105,13 @@ final class EcdsaSignature{
 	 *
 	 * @throws CryptoException
 	 */
-	public static function joseToDer(string $jose, int $coordinateSize = self::P384_COORDINATE_SIZE) : string{
-		if($coordinateSize < 1){
-			throw new \InvalidArgumentException("Coordinate size must be positive, got $coordinateSize");
-		}
+	public static function joseToDer(string $jose) : string{
+		$coordinateSize = P384::COORDINATE_SIZE;
 		if(strlen($jose) !== $coordinateSize * 2){
 			throw new CryptoException("Signature must be " . ($coordinateSize * 2) . " bytes, got " . strlen($jose));
 		}
 
 		[$r, $s] = str_split($jose, $coordinateSize);
-		$sequence = self::encodeInteger($r) . self::encodeInteger($s);
-
-		return self::ASN1_SEQUENCE_TAG . chr(strlen($sequence)) . $sequence;
-	}
-
-	private static function encodeInteger(string $value) : string{
-		$value = ltrim($value, "\x00");
-		if($value === ""){
-			$value = "\x00";
-		}elseif((ord($value[0]) & self::ASN1_INTEGER_SIGN_BIT) !== 0){
-			// DER integers are signed; prepend zero byte if high bit is set to preserve positive value
-			$value = "\x00" . $value;
-		}
-
-		return self::ASN1_INTEGER_TAG . chr(strlen($value)) . $value;
+		return Der::sequence(Der::unsignedInteger($r) . Der::unsignedInteger($s));
 	}
 }

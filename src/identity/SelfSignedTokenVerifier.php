@@ -14,15 +14,14 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\identity;
 
-use pocketmine\nethernet\crypto\CryptoException;
-
+/**
+ * Accepts only tokens signed by the key they name.
+ */
 final class SelfSignedTokenVerifier implements TokenVerifier{
 
 	public function check(JsonWebToken $token) : void{
-		try{
-			$token->verifySelfSigned();
-		}catch(CryptoException $e){
-			throw new IdentityException("Token is not self-signed: " . $e->getMessage(), 0, $e);
+		if(!$token->isSignedBy($token->getPublicKey())){
+			throw new IdentityException("Token is not signed by the key it carries");
 		}
 	}
 }

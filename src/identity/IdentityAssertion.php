@@ -14,172 +14,120 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\identity;
 
-use pocketmine\nethernet\crypto\CryptoException;
 use pocketmine\nethernet\sdp\Fingerprint;
 use function base64_decode;
 use function base64_encode;
 use function is_array;
 use function is_string;
-use function json_decode;
-use function json_encode;
-use function substr_count;
-use const JSON_THROW_ON_ERROR;
-use const JSON_UNESCAPED_SLASHES;
 
 /**
- * Represents the WebRTC identity assertion attribute (`a=identity`, RFC 8827) exchanged in SDP.
+ * The WebRTC identity assertion (`a=identity`, RFC 8827) exchanged in SDP: a token naming a key, and that key's
+ * signature over the connection's DTLS fingerprint.
  */
 final class IdentityAssertion{
 
 	public const PROTOCOL_DEFAULT = "default";
 
+	private const KEY_PROVIDER = "idp";
+	private const KEY_PROVIDER_DOMAIN = "domain";
+	private const KEY_PROVIDER_PROTOCOL = "protocol";
+	private const KEY_ASSERTION = "assertion";
+	private const KEY_TOKEN = "token";
+	private const KEY_FINGERPRINT_SIGNATURE = "fingerprints";
+
 	private function __construct(
 		private readonly string $domain,
 		private readonly string $protocol,
-		private readonly string $token,
+		private readonly JsonWebToken $token,
 		private readonly string $fingerprintSignature
-	){}
+	){
+		if($protocol !== self::PROTOCOL_DEFAULT){
+			throw new IdentityException("Identity provider protocol must be " . self::PROTOCOL_DEFAULT . ", got $protocol");
+		}
+		if($domain === ""){
+			throw new IdentityException("Identity provider domain must not be empty");
+		}
+	}
 
 	/**
-	 * @throws CryptoException
+	 * @param string $fingerprintSignature Detached JWS over the fingerprint's canonical payload
+	 *
+	 * @throws IdentityException
 	 */
-	public static function create(string $domain, string $token, string $fingerprintSignature, string $protocol = self::PROTOCOL_DEFAULT) : self{
-		$assertion = new self($domain, $protocol, $token, $fingerprintSignature);
-		$assertion->validate();
-
-		return $assertion;
+	public static function create(string $domain, JsonWebToken $token, string $fingerprintSignature) : self{
+		return new self($domain, self::PROTOCOL_DEFAULT, $token, $fingerprintSignature);
 	}
 
 	/**
 	 * Decodes the base64 value of an `a=identity` attribute.
 	 *
-	 * @throws CryptoException
+	 * @throws IdentityException
 	 */
 	public static function parse(string $attributeValue) : self{
 		$envelope = base64_decode($attributeValue, true);
 		if($envelope === false || $envelope === ""){
-			throw new CryptoException("Identity attribute is not valid base64");
+			throw new IdentityException("Identity attribute is not valid base64");
 		}
+		$decoded = Json::decodeObject($envelope, "identity envelope");
 
-		$decoded = self::decodeJsonObject($envelope, "identity envelope");
-
-		$idp = $decoded["idp"] ?? null;
+		$idp = $decoded[self::KEY_PROVIDER] ?? null;
 		if(!is_array($idp)){
-			throw new CryptoException("Identity has no idp object");
+			throw new IdentityException("Identity has no idp object");
 		}
-		$domain = $idp["domain"] ?? null;
-		$protocol = $idp["protocol"] ?? null;
+		$domain = $idp[self::KEY_PROVIDER_DOMAIN] ?? null;
+		$protocol = $idp[self::KEY_PROVIDER_PROTOCOL] ?? null;
 		if(!is_string($domain) || !is_string($protocol)){
-			throw new CryptoException("Identity provider is missing its domain or protocol");
+			throw new IdentityException("Identity provider is missing its domain or protocol");
 		}
 
-		$inner = $decoded["assertion"] ?? null;
+		/* The assertion is a JSON document carried as a string, not a nested object. */
+		$inner = $decoded[self::KEY_ASSERTION] ?? null;
 		if(!is_string($inner)){
-			throw new CryptoException("Identity assertion must be a JSON string");
+			throw new IdentityException("Identity assertion must be a JSON string");
 		}
-		$assertion = self::decodeJsonObject($inner, "identity assertion");
+		$assertion = Json::decodeObject($inner, "identity assertion");
 
-		$token = $assertion["token"] ?? null;
-		$fingerprintSignature = $assertion["fingerprints"] ?? null;
+		$token = $assertion[self::KEY_TOKEN] ?? null;
+		$fingerprintSignature = $assertion[self::KEY_FINGERPRINT_SIGNATURE] ?? null;
 		if(!is_string($token) || !is_string($fingerprintSignature)){
-			throw new CryptoException("Identity assertion is missing its token or fingerprints");
+			throw new IdentityException("Identity assertion is missing its token or fingerprints");
 		}
 
-		$result = new self($domain, $protocol, $token, $fingerprintSignature);
-		$result->validate();
-
-		return $result;
-	}
-
-	/**
-	 * @return mixed[]
-	 * @phpstan-return array<string, mixed>
-	 *
-	 * @throws CryptoException
-	 */
-	private static function decodeJsonObject(string $json, string $what) : array{
-		$decoded = json_decode($json, associative: true);
-		if(!is_array($decoded)){
-			throw new CryptoException("Malformed $what");
-		}
-
-		/** @phpstan-var array<string, mixed> $decoded */
-		return $decoded;
-	}
-
-	/**
-	 * Validates the basic structural requirements of the assertion fields.
-	 *
-	 * @throws CryptoException
-	 */
-	private function validate() : void{
-		if($this->protocol !== self::PROTOCOL_DEFAULT){
-			throw new CryptoException("Identity provider protocol must be " . self::PROTOCOL_DEFAULT . ", got $this->protocol");
-		}
-		if($this->domain === ""){
-			throw new CryptoException("Identity provider domain must not be empty");
-		}
-		if($this->token === "" || substr_count($this->token, ".") !== 2){
-			throw new CryptoException("Identity token is not valid JWS");
-		}
-		if($this->fingerprintSignature === "" || substr_count($this->fingerprintSignature, ".") !== 2){
-			throw new CryptoException("Fingerprint assertion is not valid JWS");
-		}
+		return new self($domain, $protocol, JsonWebToken::parse($token), $fingerprintSignature);
 	}
 
 	public function getDomain() : string{ return $this->domain; }
 
 	public function getProtocol() : string{ return $this->protocol; }
 
-	/** Returns the detached JWS (compact serialization) covering the SDP canonical fingerprint JSON. */
-	public function getFingerprints() : string{ return $this->fingerprintSignature; }
-
-	public function getRawToken() : string{ return $this->token; }
-
-	/**
-	 * @throws CryptoException
-	 */
-	public function getToken() : JsonWebToken{
-		return JsonWebToken::parse($this->token);
-	}
+	public function getToken() : JsonWebToken{ return $this->token; }
 
 	/**
 	 * Encodes the assertion into a base64 string for the `a=identity` SDP attribute.
 	 *
-	 * @throws CryptoException
+	 * @throws IdentityException
 	 */
 	public function encode() : string{
-		try{
-			$inner = json_encode([
-				"fingerprints" => $this->fingerprintSignature,
-				"token" => $this->token
-			], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-
-			$envelope = json_encode([
-				"assertion" => $inner,
-				"idp" => [
-					"domain" => $this->domain,
-					"protocol" => $this->protocol
-				]
-			], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-		}catch(\JsonException $e){
-			throw new CryptoException("Could not encode the identity assertion: " . $e->getMessage(), 0, $e);
-		}
-
-		return base64_encode($envelope);
+		return base64_encode(Json::encode([
+			self::KEY_ASSERTION => Json::encode([
+				self::KEY_FINGERPRINT_SIGNATURE => $this->fingerprintSignature,
+				self::KEY_TOKEN => $this->token->toString()
+			]),
+			self::KEY_PROVIDER => [
+				self::KEY_PROVIDER_DOMAIN => $this->domain,
+				self::KEY_PROVIDER_PROTOCOL => $this->protocol
+			]
+		]));
 	}
 
 	/**
-	 * Verifies that the detached JWS was signed by the `cpk` key in the JWT for the expected DTLS fingerprint.
+	 * Checks that the key the token names signed this fingerprint.
 	 *
-	 * @throws CryptoException
+	 * @throws IdentityException
 	 */
-	public function verifyFingerprint(Fingerprint $fingerprint) : PublicKey{
-		$publicKey = $this->getToken()->getPublicKey();
-		if(!JsonWebSignature::verifyDetached($this->fingerprintSignature, $fingerprint->toCanonicalPayload(), $publicKey)){
-			throw new CryptoException("Fingerprint assertion was not signed by the key in the token");
+	public function verifyFingerprint(Fingerprint $fingerprint) : void{
+		if(!JsonWebSignature::verifyDetached($this->fingerprintSignature, $fingerprint->toCanonicalPayload(), $this->token->getPublicKey())){
+			throw new IdentityException("Fingerprint assertion was not signed by the key in the token");
 		}
-
-		return $publicKey;
 	}
 }

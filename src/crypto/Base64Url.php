@@ -21,6 +21,9 @@ use function str_repeat;
 use function strlen;
 use function strtr;
 
+/**
+ * @internal
+ */
 final class Base64Url{
 
 	private function __construct(){}

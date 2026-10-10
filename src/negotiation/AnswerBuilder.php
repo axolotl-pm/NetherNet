@@ -14,7 +14,7 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\negotiation;
 
-use pocketmine\nethernet\crypto\CryptoException;
+use pocketmine\nethernet\identity\IdentityException;
 use pocketmine\nethernet\identity\IdentityProvider;
 use pocketmine\nethernet\sdp\SdpException;
 use pocketmine\nethernet\sdp\SessionDescription;
@@ -42,7 +42,7 @@ final class AnswerBuilder{
 
 	/**
 	 * @throws SdpException
-	 * @throws CryptoException
+	 * @throws IdentityException
 	 */
 	public function build(string $localDescription, CandidateMode $candidateMode) : LocalAnswer{
 		$answer = SessionDescription::parse($localDescription);

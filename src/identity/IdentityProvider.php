@@ -14,7 +14,6 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\identity;
 
-use pocketmine\nethernet\crypto\CryptoException;
 use pocketmine\nethernet\sdp\Fingerprint;
 
 /**
@@ -23,9 +22,7 @@ use pocketmine\nethernet\sdp\Fingerprint;
 interface IdentityProvider{
 
 	/**
-	 * Issues an assertion binding this host to a specific connection fingerprint.
-	 *
-	 * @throws CryptoException
+	 * @throws IdentityException
 	 */
 	public function issue(Fingerprint $localFingerprint) : IdentityAssertion;
 }

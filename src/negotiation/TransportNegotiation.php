@@ -14,7 +14,7 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\negotiation;
 
-use pocketmine\nethernet\crypto\CryptoException;
+use pocketmine\nethernet\identity\IdentityException;
 use pocketmine\nethernet\identity\PeerIdentity;
 use pocketmine\nethernet\protocol\ErrorCode;
 use pocketmine\nethernet\protocol\Reliability;
@@ -181,7 +181,7 @@ final class TransportNegotiation implements Negotiation{
 			$this->fail("Could not build an answer: " . $e->getMessage(), ErrorCode::FAILED_TO_CREATE_ANSWER);
 
 			return;
-		}catch(CryptoException $e){
+		}catch(IdentityException $e){
 			$this->fail("Could not issue an identity assertion: " . $e->getMessage(), ErrorCode::FAILED_TO_CREATE_IDENTITY_ASSERTION);
 
 			return;

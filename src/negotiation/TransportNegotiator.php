@@ -14,9 +14,9 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\negotiation;
 
+use pocketmine\nethernet\identity\AssertionIdentityVerifier;
 use pocketmine\nethernet\identity\IdentityException;
 use pocketmine\nethernet\identity\IdentityProvider;
-use pocketmine\nethernet\identity\IdentityVerifier;
 use pocketmine\nethernet\protocol\ErrorCode;
 use pocketmine\nethernet\sdp\SdpException;
 use pocketmine\nethernet\sdp\SessionDescription;
@@ -51,7 +51,7 @@ final class TransportNegotiator implements Negotiator{
 	 */
 	public function __construct(
 		IdentityProvider $identityProvider,
-		private readonly IdentityVerifier $identityVerifier,
+		private readonly AssertionIdentityVerifier $identityVerifier,
 		private readonly PeerTransportFactory $transportFactory,
 		private readonly ConnectionBudgetConfiguration $budget,
 		private readonly float $gatheringTimeout,

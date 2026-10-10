@@ -15,10 +15,10 @@ declare(strict_types=1);
 namespace pocketmine\nethernet\crypto;
 
 use function openssl_error_string;
-use function str_pad;
-use function strlen;
-use const STR_PAD_LEFT;
 
+/**
+ * @internal
+ */
 final class OpenSsl{
 
 	private function __construct(){
@@ -32,18 +32,5 @@ final class OpenSsl{
 		}
 
 		return $message ?? "no detail available";
-	}
-
-	/**
-	 * Restores a curve component to its full width.
-	 *
-	 * @throws CryptoException if the value is wider than the curve allows
-	 */
-	public static function padCoordinate(string $value, int $size) : string{
-		if(strlen($value) > $size){
-			throw new CryptoException("Curve component length (" . strlen($value) . " bytes) exceeds maximum curve coordinate size ($size bytes)");
-		}
-
-		return str_pad($value, $size, "\x00", STR_PAD_LEFT);
 	}
 }

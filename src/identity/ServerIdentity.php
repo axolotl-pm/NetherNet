@@ -16,28 +16,21 @@ namespace pocketmine\nethernet\identity;
 
 use pocketmine\nethernet\crypto\CryptoException;
 use pocketmine\nethernet\crypto\Der;
+use pocketmine\nethernet\crypto\Es384;
 use pocketmine\nethernet\crypto\OpenSsl;
+use pocketmine\nethernet\crypto\P384;
 use function base64_encode;
 use function chunk_split;
-use function hex2bin;
 use function is_array;
 use function is_string;
 use function openssl_pkey_get_details;
 use function openssl_pkey_get_private;
 use function openssl_pkey_new;
 
+/**
+ * The P-384 key pair a host identifies itself with.
+ */
 final class ServerIdentity{
-
-	public const OPENSSL_CURVE_NAME = "secp384r1";
-
-	/** Coordinate width for P-384 */
-	private const COORDINATE_SIZE = 48;
-
-	/** OID 1.2.840.10045.2.1, id-ecPublicKey. */
-	private const OID_EC_PUBLIC_KEY = "06072a8648ce3d0201";
-
-	/** OID 1.3.132.0.34, secp384r1. */
-	private const OID_SECP384R1 = "06052b81040022";
 
 	private function __construct(
 		private readonly \OpenSSLAsymmetricKey $privateKey,
@@ -45,31 +38,47 @@ final class ServerIdentity{
 	){}
 
 	/**
-	 * @throws CryptoException
+	 * @throws IdentityException
 	 */
 	public static function generate() : self{
-		$key = openssl_pkey_new(["ec" => ["curve_name" => self::OPENSSL_CURVE_NAME]]);
+		$key = openssl_pkey_new(["ec" => ["curve_name" => P384::OPENSSL_CURVE_NAME]]);
 		if($key === false){
-			throw new CryptoException("OpenSSL could not generate a key: " . OpenSsl::lastError());
+			throw new IdentityException("OpenSSL could not generate a key: " . OpenSsl::lastError());
 		}
 
 		return new self($key, PublicKey::fromOpenSslKey($key));
 	}
 
 	/**
-	 * @throws CryptoException
+	 * @throws IdentityException
 	 */
 	public static function fromPrivateKeyPem(string $pem, ?string $passphrase = null) : self{
 		$key = openssl_pkey_get_private($pem, $passphrase);
 		if($key === false){
-			throw new CryptoException("OpenSSL could not read the private key: " . OpenSsl::lastError());
+			throw new IdentityException("OpenSSL could not read the private key: " . OpenSsl::lastError());
 		}
 
 		return new self($key, PublicKey::fromOpenSslKey($key));
 	}
 
 	/**
-	 * @throws CryptoException
+	 * Returns the ES384 signature of the input, in JOSE form.
+	 *
+	 * @throws IdentityException
+	 */
+	public function sign(string $input) : string{
+		try{
+			return Es384::sign($input, $this->privateKey);
+		}catch(CryptoException $e){
+			throw new IdentityException($e->getMessage(), 0, $e);
+		}
+	}
+
+	/**
+	 * Returns the key pair as an unencrypted PKCS#8 PEM. Written by hand because OpenSSL's own export
+	 * needs a configuration file that is often missing on Windows.
+	 *
+	 * @throws IdentityException
 	 */
 	public function exportPrivateKeyPem() : string{
 		[$d, $x, $y] = $this->readComponents();
@@ -79,15 +88,9 @@ final class ServerIdentity{
 			Der::octetString($d) .
 			Der::tagged(1, Der::bitString("\x04" . $x . $y))
 		);
-
-		$algorithm = hex2bin(self::OID_EC_PUBLIC_KEY . self::OID_SECP384R1);
-		if($algorithm === false){
-			throw new CryptoException("Algorithm identifier is not valid hex");
-		}
-
 		$der = Der::sequence(
 			Der::integer("\x00") .
-			Der::sequence($algorithm) .
+			Der::sequence(P384::ALGORITHM_IDENTIFIER) .
 			Der::octetString($ecPrivateKey)
 		);
 
@@ -99,21 +102,25 @@ final class ServerIdentity{
 	/**
 	 * @phpstan-return array{string, string, string}
 	 *
-	 * @throws CryptoException
+	 * @throws IdentityException
 	 */
 	private function readComponents() : array{
 		$details = openssl_pkey_get_details($this->privateKey);
 		if($details === false || !isset($details["ec"]) || !is_array($details["ec"])){
-			throw new CryptoException("Failed to extract key components from OpenSSL key: " . OpenSsl::lastError());
+			throw new IdentityException("Failed to extract key components from OpenSSL key: " . OpenSsl::lastError());
 		}
 
 		$components = [];
 		foreach(["d", "x", "y"] as $name){
 			$value = $details["ec"][$name] ?? null;
 			if(!is_string($value) || $value === ""){
-				throw new CryptoException("The key is missing its $name component");
+				throw new IdentityException("The key is missing its $name component");
 			}
-			$components[] = OpenSsl::padCoordinate($value, self::COORDINATE_SIZE);
+			try{
+				$components[] = P384::padCoordinate($value);
+			}catch(CryptoException $e){
+				throw new IdentityException($e->getMessage(), 0, $e);
+			}
 		}
 
 		return [$components[0], $components[1], $components[2]];

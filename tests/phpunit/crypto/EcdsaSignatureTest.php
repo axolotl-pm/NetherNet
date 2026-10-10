@@ -41,7 +41,7 @@ final class EcdsaSignatureTest extends TestCase{
 			self::assertTrue(openssl_sign(random_bytes(32), $der, $privateKey, OPENSSL_ALGO_SHA384));
 
 			$jose = EcdsaSignature::derToJose($der);
-			self::assertSame(EcdsaSignature::P384_COORDINATE_SIZE * 2, strlen($jose));
+			self::assertSame(P384::COORDINATE_SIZE * 2, strlen($jose));
 
 			//DER is not byte-identical after a round trip when the original carried a
 			//redundant leading zero, so the fixed-width form is what gets compared
