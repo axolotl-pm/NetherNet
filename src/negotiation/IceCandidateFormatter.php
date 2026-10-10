@@ -22,6 +22,7 @@ use function array_merge;
 use function array_unique;
 use function array_values;
 use function in_array;
+use function str_contains;
 use function str_starts_with;
 use function strlen;
 use function substr;
@@ -33,6 +34,9 @@ use function substr;
 final class IceCandidateFormatter{
 
 	private const PREFIX = "candidate:";
+
+	/** Foundations are numbers in every stack clients are written against; these stay clear of gathered ones. */
+	private const ADVERTISED_FOUNDATION = 80000000;
 
 	private function __construct(){}
 
@@ -65,9 +69,11 @@ final class IceCandidateFormatter{
 	}
 
 	/**
-	 * Rewrites gathered candidates so that clients are only offered the specified addresses. Candidates on any other
-	 * address are dropped, and addresses not matching any gathered candidate are announced as server-reflexive on
-	 * the port of the first UDP host candidate, simulating a 1:1 port-forwarded NAT.
+	 * Rewrites gathered candidates so that clients are told of no address of this host other than the specified ones.
+	 * Host candidates on any other address are dropped. Reflexive and relayed candidates stay, being what the outside
+	 * already sees, without the address they were derived from. An address no gathered candidate names is announced
+	 * as server-reflexive on the port of the first UDP host candidate of its family, simulating a 1:1 port-forwarded
+	 * NAT.
 	 *
 	 * @param string[] $candidates candidate attribute values, without the "a=candidate:" prefix
 	 * @phpstan-param list<string> $candidates
@@ -81,29 +87,42 @@ final class IceCandidateFormatter{
 		$addresses = array_values(array_unique(array_map(fn(string $address) => InternetAddress::normalizeIp($address) ?? $address, $addresses)));
 		$kept = [];
 		$matchedAddresses = [];
-		$port = null;
+		$ports = [];
 		foreach($candidates as $value){
 			$candidate = IceCandidate::parse($value);
 			if($candidate === null){
 				continue;
 			}
-			if($port === null && $candidate->isUdpHost()){
-				$port = $candidate->port;
+			if($candidate->isUdpHost()){
+				$ports[$candidate->isIpv6()] ??= $candidate->port;
 			}
 			$address = InternetAddress::normalizeIp($candidate->address) ?? $candidate->address;
-			if(in_array($address, $addresses, true)){
-				$kept[] = $value;
+			$listed = in_array($address, $addresses, true);
+			if($listed){
 				$matchedAddresses[$address] = true;
 			}
-		}
-		if($port === null){
-			return $kept;
+			if(!$candidate->isHost()){
+				$kept[] = $candidate->withoutRelatedAddress()->toString();
+			}elseif($listed){
+				$kept[] = $value;
+			}
 		}
 
+		$announced = 0;
 		foreach($addresses as $address){
-			if(!isset($matchedAddresses[$address])){
-				$kept[] = IceCandidate::serverReflexive("advertised", $address, $port)->toString();
+			$port = $ports[str_contains($address, ":")] ?? null;
+			if($port === null || isset($matchedAddresses[$address])){
+				continue;
 			}
+
+			/* Each takes the next lower local preference, which has to be unique among candidates of one type. */
+			$kept[] = IceCandidate::serverReflexive(
+				(string) (self::ADVERTISED_FOUNDATION + $announced),
+				$address,
+				$port,
+				IceCandidate::SERVER_REFLEXIVE_PRIORITY - ($announced << 8)
+			)->toString();
+			$announced++;
 		}
 
 		return $kept;

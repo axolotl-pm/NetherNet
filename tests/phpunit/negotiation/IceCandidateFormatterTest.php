@@ -39,7 +39,7 @@ final class IceCandidateFormatterTest extends TestCase{
 	public function testForeignAddressIsAnnouncedAsServerReflexiveOnTheGatheredPort() : void{
 		$advertised = IceCandidateFormatter::advertise([self::LAN_HOST, self::DOCKER_HOST], ["203.0.113.10"]);
 
-		self::assertSame(["advertised 1 udp " . ((100 << 24) + (65535 << 8) + 255) . " 203.0.113.10 38922 typ srflx raddr 0.0.0.0 rport 0"], $advertised);
+		self::assertSame(["80000000 1 udp " . ((100 << 24) + (65535 << 8) + 255) . " 203.0.113.10 38922 typ srflx raddr 0.0.0.0 rport 0"], $advertised);
 	}
 
 	public function testIpv6AddressMatchesRegardlessOfNotation() : void{
@@ -47,15 +47,15 @@ final class IceCandidateFormatterTest extends TestCase{
 	}
 
 	public function testIpv6ServerReflexiveUsesIpv6UnspecifiedRelatedAddress() : void{
-		$advertised = IceCandidateFormatter::advertise([self::LAN_HOST], ["2001:db8::1"]);
+		$advertised = IceCandidateFormatter::advertise([self::LAN_HOST, self::IPV6_HOST], ["2001:db8::1"]);
 
-		self::assertSame(["advertised 1 udp " . ((100 << 24) + (65535 << 8) + 255) . " 2001:db8::1 38922 typ srflx raddr :: rport 0"], $advertised);
+		self::assertSame(["80000000 1 udp " . ((100 << 24) + (65535 << 8) + 255) . " 2001:db8::1 38922 typ srflx raddr :: rport 0"], $advertised);
 	}
 
-	public function testFormattedIpv6ServerReflexiveUsesIpv6UnspecifiedRelatedAddress() : void{
+	public function testFormattedCandidateKeepsTheRelatedAddressItWasGatheredWith() : void{
 		$formatted = IceCandidateFormatter::format("candidate:1 1 UDP 1686052607 2001:db8::1 38922 typ srflx raddr fd7a:115c:a1e0::1 rport 38922", "ufrag", 0);
 
-		self::assertStringContainsString("2001:db8::1 38922 typ srflx raddr :: rport 0 ", $formatted);
+		self::assertStringContainsString("2001:db8::1 38922 typ srflx raddr fd7a:115c:a1e0::1 rport 38922 generation 0 ", $formatted);
 	}
 
 	/**

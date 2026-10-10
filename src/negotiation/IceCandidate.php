@@ -16,11 +16,9 @@ namespace pocketmine\nethernet\negotiation;
 
 use function count;
 use function explode;
-use function filter_var;
 use function implode;
+use function str_contains;
 use function strtolower;
-use const FILTER_FLAG_IPV6;
-use const FILTER_VALIDATE_IP;
 
 /**
  * @internal
@@ -35,7 +33,7 @@ final class IceCandidate{
 	private const COMPONENT = "1";
 
 	/** RFC 8445 section 5.1.2.1 priority for a server-reflexive candidate */
-	private const SERVER_REFLEXIVE_PRIORITY = (100 << 24) + (65535 << 8) + 255;
+	public const SERVER_REFLEXIVE_PRIORITY = (100 << 24) + (65535 << 8) + 255;
 
 	public function __construct(
 		public readonly string $foundation,
@@ -43,7 +41,9 @@ final class IceCandidate{
 		public readonly string $priority,
 		public readonly string $address,
 		public readonly string $port,
-		public readonly string $type
+		public readonly string $type,
+		public readonly ?string $relatedAddress = null,
+		public readonly ?string $relatedPort = null
 	){}
 
 	/**
@@ -55,29 +55,49 @@ final class IceCandidate{
 			return null;
 		}
 
-		return new self($parts[0], $parts[2], $parts[3], $parts[4], $parts[5], $parts[7]);
-	}
+		$related = [];
+		for($i = 8; $i + 1 < count($parts); $i += 2){
+			$related[$parts[$i]] = $parts[$i + 1];
+		}
 
-	public static function serverReflexive(string $foundation, string $address, string $port) : self{
-		return new self($foundation, "udp", (string) self::SERVER_REFLEXIVE_PRIORITY, $address, $port, self::TYPE_SERVER_REFLEXIVE);
-	}
-
-	public function isUdpHost() : bool{
-		return $this->type === self::TYPE_HOST && strtolower($this->protocol) === "udp";
+		return new self($parts[0], $parts[2], $parts[3], $parts[4], $parts[5], $parts[7], $related["raddr"] ?? null, $related["rport"] ?? null);
 	}
 
 	/**
-	 * Returns the attribute value, without the "candidate:" prefix. The address a reflexive or relayed candidate was
-	 * derived from is always written as unspecified, which keeps it private while leaving the form clients expect.
+	 * Builds a candidate for an address this host is reached at but did not gather. What it was derived from is left
+	 * unspecified, which keeps the host's own address private.
+	 */
+	public static function serverReflexive(string $foundation, string $address, string $port, int $priority = self::SERVER_REFLEXIVE_PRIORITY) : self{
+		return new self($foundation, "udp", (string) $priority, $address, $port, self::TYPE_SERVER_REFLEXIVE);
+	}
+
+	public function withoutRelatedAddress() : self{
+		return new self($this->foundation, $this->protocol, $this->priority, $this->address, $this->port, $this->type);
+	}
+
+	public function isHost() : bool{
+		return $this->type === self::TYPE_HOST;
+	}
+
+	public function isUdpHost() : bool{
+		return $this->isHost() && strtolower($this->protocol) === "udp";
+	}
+
+	public function isIpv6() : bool{
+		return str_contains($this->address, ":");
+	}
+
+	/**
+	 * Returns the attribute value, without the "candidate:" prefix. A reflexive or relayed candidate names the address
+	 * it was derived from, as unspecified when it has none to name.
 	 */
 	public function toString() : string{
 		$parts = [$this->foundation, self::COMPONENT, $this->protocol, $this->priority, $this->address, $this->port, "typ", $this->type];
 		if($this->type === self::TYPE_SERVER_REFLEXIVE || $this->type === self::TYPE_RELAY){
-			$ipv6 = filter_var($this->address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
 			$parts[] = "raddr";
-			$parts[] = $ipv6 ? "::" : "0.0.0.0";
+			$parts[] = $this->relatedAddress ?? ($this->isIpv6() ? "::" : "0.0.0.0");
 			$parts[] = "rport";
-			$parts[] = "0";
+			$parts[] = $this->relatedPort ?? "0";
 		}
 
 		return implode(" ", $parts);
