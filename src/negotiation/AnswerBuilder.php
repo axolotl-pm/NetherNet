@@ -16,6 +16,7 @@ namespace pocketmine\nethernet\negotiation;
 
 use pocketmine\nethernet\identity\IdentityException;
 use pocketmine\nethernet\identity\IdentityProvider;
+use pocketmine\nethernet\protocol\ErrorCode;
 use pocketmine\nethernet\sdp\SdpException;
 use pocketmine\nethernet\sdp\SessionDescription;
 
@@ -36,6 +37,7 @@ final class AnswerBuilder{
 	/**
 	 * @throws SdpException
 	 * @throws IdentityException
+	 * @throws NegotiationException if a bundled answer would carry no candidate to reach this host at
 	 */
 	public function build(string $localDescription, CandidateMode $candidateMode) : LocalAnswer{
 		$answer = SessionDescription::parse($localDescription);
@@ -49,6 +51,9 @@ final class AnswerBuilder{
 			$answer = $answer->withoutCandidates();
 		}elseif($this->advertisedAddresses !== null){
 			$answer = $answer->withCandidates(IceCandidateFormatter::advertise($answer->getMediaAttributeValues("candidate"), $this->advertisedAddresses));
+		}
+		if($candidateMode === CandidateMode::BUNDLED && $answer->countCandidates() === 0){
+			throw new NegotiationException("No local candidates to answer with", ErrorCode::ICE);
 		}
 
 		$assertion = $this->identityProvider->issue($answer->getFingerprint());

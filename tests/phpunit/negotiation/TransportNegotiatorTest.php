@@ -162,7 +162,7 @@ final class TransportNegotiatorTest extends TestCase{
 
 		$this->negotiator->tick(100.0 + self::GATHERING_TIMEOUT);
 		self::assertTrue($negotiation->isFailed());
-		self::assertSame(ErrorCode::NEGOTIATION_TIMEOUT, $negotiation->getFailureCode());
+		self::assertSame(ErrorCode::ICE, $negotiation->getFailureCode());
 		self::assertTrue($this->transport()->closed);
 	}
 
@@ -210,7 +210,7 @@ final class TransportNegotiatorTest extends TestCase{
 		$this->negotiator->tick(100.0);
 
 		$transport->gatheringComplete = true;
-		$transport->localDescription = SdpFixture::description();
+		$transport->localDescription = SdpFixture::description([SdpFixture::HOST_CANDIDATE]);
 		$this->negotiator->tick(100.0 + self::GATHERING_TIMEOUT - 1.0);
 		self::assertNotNull($negotiation->getAnswer());
 
@@ -388,7 +388,7 @@ final class TransportNegotiatorTest extends TestCase{
 		$this->negotiator->beginNegotiation(SdpFixture::description(), "2222");
 		$waitingTransport = $this->factory->created[1];
 		$waitingTransport->gatheringComplete = true;
-		$waitingTransport->localDescription = SdpFixture::description();
+		$waitingTransport->localDescription = SdpFixture::description([SdpFixture::HOST_CANDIDATE]);
 		$this->negotiator->tick(100.0);
 		$this->openChannels($waitingTransport);
 		$this->negotiator->tick(100.1);

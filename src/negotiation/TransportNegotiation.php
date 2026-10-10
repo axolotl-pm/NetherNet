@@ -178,7 +178,7 @@ final class TransportNegotiation implements Negotiation{
 	private function updateGathering(float $now) : void{
 		/* A bundled answer carries every candidate, so it cannot be built until gathering is over. */
 		if($this->candidateMode === CandidateMode::BUNDLED && !$this->transport->isGatheringComplete()){
-			$this->failIfTimedOut($now, $this->gatheringTimeout, "Timed out gathering ICE candidates", ErrorCode::NEGOTIATION_TIMEOUT);
+			$this->failIfTimedOut($now, $this->gatheringTimeout, "Timed out gathering ICE candidates", ErrorCode::ICE);
 
 			return;
 		}
@@ -198,6 +198,10 @@ final class TransportNegotiation implements Negotiation{
 			return;
 		}catch(IdentityException $e){
 			$this->fail("Could not issue an identity assertion: " . $e->getMessage(), ErrorCode::FAILED_TO_CREATE_IDENTITY_ASSERTION);
+
+			return;
+		}catch(NegotiationException $e){
+			$this->fail($e->getMessage(), $e->getErrorCode());
 
 			return;
 		}
