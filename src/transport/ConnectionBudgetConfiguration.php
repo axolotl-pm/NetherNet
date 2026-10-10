@@ -24,11 +24,13 @@ final class ConnectionBudgetConfiguration{
 	/** Advertised in SDP answers as `a=max-message-size`. */
 	public const DEFAULT_MAX_MESSAGE_SIZE = Segmenter::MAX_SEGMENT_PAYLOAD_SIZE + Segmenter::HEADER_SIZE;
 
-	public const DEFAULT_MAX_PAYLOAD_SIZE = 262144;
+	/** The largest message a vanilla client sends: 256 segments of 9999 payload bytes. */
+	public const DEFAULT_MAX_PAYLOAD_SIZE = 256 * 9999;
 
-	public const DEFAULT_MAX_RECEIVE_QUEUE_SIZE = 262144;
+	/** Room for every segment of one such message to be waiting at once, counter bytes included. */
+	public const DEFAULT_MAX_RECEIVE_QUEUE_SIZE = 256 * 10000;
 
-	public const DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES = 256;
+	public const DEFAULT_MAX_RECEIVE_QUEUE_MESSAGES = 512;
 
 	public const DEFAULT_MAX_SEND_QUEUE_SIZE = 4194304;
 
