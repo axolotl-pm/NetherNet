@@ -15,10 +15,10 @@ declare(strict_types=1);
 namespace pocketmine\nethernet;
 
 use PHPUnit\Framework\TestCase;
+use pocketmine\nethernet\info\MutableServerInfoProvider;
+use pocketmine\nethernet\info\ServerInfo;
 use pocketmine\nethernet\signaling\http\HttpSignaling;
-use pocketmine\nethernet\signaling\lan\FixedServerDataProvider;
 use pocketmine\nethernet\signaling\lan\LanSignaling;
-use pocketmine\nethernet\signaling\lan\ServerData;
 use pocketmine\nethernet\signaling\Signaling;
 use pocketmine\nethernet\signaling\SignalingException;
 use pocketmine\nethernet\utils\InternetAddress;
@@ -86,7 +86,7 @@ final class IdleTransportTest extends TestCase{
 	public function testIdleLanSignalingLogsNothingBeyondItsStartupLine() : void{
 		$logger = new RecordingLogger();
 		$signaling = $this->startOnAFreePort(fn(int $port) => new LanSignaling(
-			new FixedServerDataProvider(new ServerData(serverName: "host", protocol: 2181, version: "1.26.50", levelName: "world")),
+			new MutableServerInfoProvider(new ServerInfo(serverName: "host", protocol: 2181, gameVersion: "1.26.50", levelName: "world")),
 			4242,
 			new InternetAddress("127.0.0.1", $port, 4)
 		), $logger);

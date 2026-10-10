@@ -12,24 +12,17 @@
 
 declare(strict_types=1);
 
-namespace pocketmine\nethernet\signaling\lan;
+namespace pocketmine\nethernet\info;
 
-final class MutableServerDataProvider implements ServerDataProvider{
+final class MutableServerInfoProvider implements ServerInfoProvider{
 
 	public function __construct(
-		private ServerData $data
+		private ?ServerInfo $info = null
 	){}
 
-	public function getServerData() : ServerData{ return $this->data; }
+	public function getServerInfo() : ?ServerInfo{ return $this->info; }
 
-	public function setServerData(ServerData $data) : void{
-		$this->data = $data;
-	}
-
-	public function setPongData(string $pong) : void{
-		$data = ServerData::fromPongData($pong);
-		if($data !== null){
-			$this->data = $data;
-		}
+	public function setServerInfo(?ServerInfo $info) : void{
+		$this->info = $info;
 	}
 }

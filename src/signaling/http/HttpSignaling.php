@@ -15,6 +15,7 @@ declare(strict_types=1);
 namespace pocketmine\nethernet\signaling\http;
 
 use pocketmine\nethernet\crypto\OpenSsl;
+use pocketmine\nethernet\info\ServerInfoProvider;
 use pocketmine\nethernet\negotiation\NegotiationException;
 use pocketmine\nethernet\negotiation\Negotiator;
 use pocketmine\nethernet\signaling\Signaling;
@@ -121,15 +122,15 @@ final class HttpSignaling implements Signaling{
 	private \Logger $logger;
 
 	/**
-	 * @param array<string, mixed>|null $tlsContext     SSL context options for HTTPS support, carrying the server certificate and key (`local_cert`, `local_pk`).
-	 * @param ServerStatusProvider|null $statusProvider Provider for capability probe (`GET /v1/join`) responses.
-	 * @param ReverseProxy|null         $reverseProxy   Reverse proxy configuration for resolving client IP addresses.
+	 * @param array<string, mixed>|null $tlsContext   SSL context options for HTTPS support, carrying the server certificate and key (`local_cert`, `local_pk`).
+	 * @param ServerInfoProvider|null   $infoProvider Provider for capability probe (`GET /v1/join`) responses.
+	 * @param ReverseProxy|null         $reverseProxy Reverse proxy configuration for resolving client IP addresses.
 	 */
 	public function __construct(
 		private readonly InternetAddress $bindAddress,
 		private readonly ?array $tlsContext = null,
 		private readonly int $maxConnections = self::DEFAULT_MAX_CONNECTIONS,
-		private readonly ?ServerStatusProvider $statusProvider = null,
+		private readonly ?ServerInfoProvider $infoProvider = null,
 		private readonly ?ReverseProxy $reverseProxy = null
 	){
 		if($maxConnections < 1){
@@ -522,11 +523,14 @@ final class HttpSignaling implements Signaling{
 	 * Responds to client capability probe requests (`GET /v1/join`).
 	 */
 	private function respondToProbe(HttpConnection $connection) : void{
+		$info = $this->infoProvider?->getServerInfo();
 		$status = null;
-		try{
-			$status = $this->statusProvider?->getServerStatus()?->toJson();
-		}catch(\Throwable $e){
-			$this->logger->debug("Could not build the server status: " . $e->getMessage());
+		if($info !== null){
+			try{
+				$status = ServerInfoJson::encode($info);
+			}catch(\JsonException $e){
+				$this->logger->debug("Could not build the server status: " . $e->getMessage());
+			}
 		}
 
 		if($status === null){

@@ -16,6 +16,9 @@ namespace pocketmine\nethernet\signaling\lan;
 
 use PHPUnit\Framework\TestCase;
 use pocketmine\nethernet\FakeNegotiator;
+use pocketmine\nethernet\info\MutableServerInfoProvider;
+use pocketmine\nethernet\info\ServerInfo;
+use pocketmine\nethernet\info\ServerInfoProvider;
 use pocketmine\nethernet\negotiation\CandidateMode;
 use pocketmine\nethernet\negotiation\Negotiator;
 use pocketmine\nethernet\protocol\ErrorCode;
@@ -88,13 +91,13 @@ final class LanSignalingTest extends TestCase{
 		return $peer;
 	}
 
-	private function startHost(Negotiator $negotiator) : void{
+	private function startHost(Negotiator $negotiator, ?ServerInfoProvider $infoProvider = null) : void{
 		//an ephemeral port keeps this off 7551, where a real client or another run
 		//of the suite may already be listening
 		for($attempt = 0; $attempt < 20; ++$attempt){
 			$port = random_int(20000, 60000);
 			$signaling = new LanSignaling(
-				new FixedServerDataProvider(new ServerData(serverName: "test host", protocol: 2181, version: "1.26.50", levelName: "test world", playerCount: 3, maxPlayerCount: 10)),
+				$infoProvider ?? new MutableServerInfoProvider(new ServerInfo(serverName: "test host", protocol: 2181, gameVersion: "1.26.50", levelName: "test world", playerCount: 3, maxPlayerCount: 10)),
 				self::HOST_NETWORK_ID,
 				new InternetAddress("127.0.0.1", $port, 4)
 			);
@@ -119,7 +122,7 @@ final class LanSignalingTest extends TestCase{
 			$port = random_int(20000, 60000);
 			$server = new NetherNetServer($negotiator, new SessionManager(new RecordingEventListener(), new ConnectionBudgetConfiguration(), $logger = new RecordingLogger()), $logger);
 			$signaling = new LanSignaling(
-				new FixedServerDataProvider(new ServerData(serverName: "test host", protocol: 2181, version: "1.26.50", levelName: "test world")),
+				new MutableServerInfoProvider(new ServerInfo(serverName: "test host", protocol: 2181, gameVersion: "1.26.50", levelName: "test world")),
 				self::HOST_NETWORK_ID,
 				new InternetAddress("127.0.0.1", $port, 4)
 			);
@@ -180,10 +183,18 @@ final class LanSignalingTest extends TestCase{
 		self::assertInstanceOf(ResponsePacket::class, $packet);
 		self::assertSame(self::HOST_NETWORK_ID, $senderId);
 
-		$advert = ServerData::read($packet->applicationData);
+		$advert = ServerInfoCodec::decode($packet->applicationData);
 		self::assertSame("test host", $advert->serverName);
 		self::assertSame("test world", $advert->levelName);
 		self::assertSame(3, $advert->playerCount);
+	}
+
+	public function testDiscoveryRequestGoesUnansweredWhileThereIsNothingToAdvertise() : void{
+		$this->startHost(new FakeNegotiator("answer-sdp"), new MutableServerInfoProvider());
+
+		$this->sendToHost(new RequestPacket());
+
+		self::assertNull($this->receive());
 	}
 
 	/**

@@ -16,6 +16,9 @@ namespace pocketmine\nethernet\signaling\http;
 
 use PHPUnit\Framework\TestCase;
 use pocketmine\nethernet\FakeNegotiator;
+use pocketmine\nethernet\info\MutableServerInfoProvider;
+use pocketmine\nethernet\info\ServerInfo;
+use pocketmine\nethernet\info\ServerInfoProvider;
 use pocketmine\nethernet\negotiation\CandidateMode;
 use pocketmine\nethernet\negotiation\Negotiator;
 use pocketmine\nethernet\signaling\SignalingException;
@@ -63,10 +66,10 @@ final class HttpSignalingTest extends TestCase{
 		$this->signaling?->shutdown();
 	}
 
-	private function start(Negotiator $negotiator, ?ServerStatusProvider $statusProvider = null, ?ReverseProxy $reverseProxy = null) : void{
+	private function start(Negotiator $negotiator, ?ServerInfoProvider $infoProvider = null, ?ReverseProxy $reverseProxy = null) : void{
 		for($attempt = 0; $attempt < 20; ++$attempt){
 			$port = random_int(20000, 60000);
-			$signaling = new HttpSignaling(new InternetAddress("127.0.0.1", $port, 4), statusProvider: $statusProvider, reverseProxy: $reverseProxy);
+			$signaling = new HttpSignaling(new InternetAddress("127.0.0.1", $port, 4), infoProvider: $infoProvider, reverseProxy: $reverseProxy);
 
 			try{
 				$signaling->start(TestSignalingContext::create($negotiator));
@@ -135,14 +138,14 @@ final class HttpSignalingTest extends TestCase{
 	 * blank.
 	 */
 	public function testProbeCarriesTheStatusWhenThereIsOne() : void{
-		$status = new ServerStatus("Dedicated Server", 800, "1.21.100", "Bedrock level", 3, 20);
-		$this->start(new FakeNegotiator("answer-sdp"), new MutableServerStatusProvider($status));
+		$status = new ServerInfo("Dedicated Server", 800, "1.21.100", "Bedrock level", playerCount: 3, maxPlayerCount: 20);
+		$this->start(new FakeNegotiator("answer-sdp"), new MutableServerInfoProvider($status));
 
 		$response = $this->exchange($this->connect(), "GET /v1/join HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
 
 		self::assertStringStartsWith("HTTP/1.1 200 OK\r\n", $response);
 		self::assertStringContainsString("Content-Type: application/json\r\n", $response);
-		self::assertStringEndsWith("\r\n\r\n" . $status->toJson(), $response);
+		self::assertStringEndsWith("\r\n\r\n" . ServerInfoJson::encode($status), $response);
 	}
 
 	/**
@@ -150,7 +153,7 @@ final class HttpSignalingTest extends TestCase{
 	 * nothing must not read as "this host does not speak NetherNet".
 	 */
 	public function testProbeStillSucceedsWithNoStatusYet() : void{
-		$this->start(new FakeNegotiator("answer-sdp"), new MutableServerStatusProvider());
+		$this->start(new FakeNegotiator("answer-sdp"), new MutableServerInfoProvider());
 
 		$response = $this->exchange($this->connect(), "GET /v1/join HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
 

@@ -12,12 +12,12 @@
 
 declare(strict_types=1);
 
-namespace pocketmine\nethernet\signaling\http;
+namespace pocketmine\nethernet\info;
 
-/**
- * Interface for providing server status metadata in response to HTTP capability probes.
- */
-interface ServerStatusProvider{
+interface ServerInfoProvider{
 
-	public function getServerStatus() : ?ServerStatus;
+	/**
+	 * Returns null while the host has nothing to advertise yet.
+	 */
+	public function getServerInfo() : ?ServerInfo;
 }

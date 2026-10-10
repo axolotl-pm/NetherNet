@@ -16,13 +16,15 @@ namespace pocketmine\nethernet\signaling\lan;
 
 use PHPUnit\Framework\TestCase;
 use pocketmine\nethernet\info\GameType;
+use pocketmine\nethernet\info\ServerInfo;
 use function bin2hex;
 use function chr;
+use function count;
 use function hex2bin;
 use function strlen;
 use function substr;
 
-final class ServerDataTest extends TestCase{
+final class ServerInfoCodecTest extends TestCase{
 
 	private const REFERENCE = "07"
 		. "06" . "736572766572"          //"server"
@@ -36,11 +38,11 @@ final class ServerDataTest extends TestCase{
 		. "05" . "6e6f6e6365"            //"nonce"
 		. "08";                          //zigzag varint 4, connection type
 
-	private static function reference() : ServerData{
-		return new ServerData(
+	private static function reference() : ServerInfo{
+		return new ServerInfo(
 			serverName: "server",
 			protocol: 2181,
-			version: "1.26.50",
+			gameVersion: "1.26.50",
 			levelName: "world",
 			gameType: GameType::ADVENTURE,
 			playerCount: 1,
@@ -49,14 +51,13 @@ final class ServerDataTest extends TestCase{
 			hardcore: true,
 			acceptsOnlineAuth: true,
 			acceptsSelfSignedAuth: true,
-			nonce: "nonce",
-			connectionType: ServerData::CONNECTION_TYPE_NETHERNET
+			nonce: "nonce"
 		);
 	}
 
 	public function testMatchesTheReferenceEncoding() : void{
-		self::assertSame(self::REFERENCE, bin2hex(self::reference()->write()));
-		self::assertSame(38, strlen(self::reference()->write()));
+		self::assertSame(self::REFERENCE, bin2hex(ServerInfoCodec::encode(self::reference())));
+		self::assertSame(38, strlen(ServerInfoCodec::encode(self::reference())));
 	}
 
 	/**
@@ -65,10 +66,10 @@ final class ServerDataTest extends TestCase{
 	 * shows up as the varint after it decoding into nonsense.
 	 */
 	public function testNonceIsCarriedBetweenTheAuthFlagsAndTheConnectionType() : void{
-		$data = new ServerData(
+		$data = new ServerInfo(
 			serverName: "server",
 			protocol: 2181,
-			version: "1.26.50",
+			gameVersion: "1.26.50",
 			levelName: "world",
 			gameType: GameType::ADVENTURE,
 			playerCount: 1,
@@ -78,23 +79,22 @@ final class ServerDataTest extends TestCase{
 
 		self::assertSame(
 			"07067365727665728a2207312e32362e353005776f726c64021004000001010661316232633308",
-			bin2hex($data->write())
+			bin2hex(ServerInfoCodec::encode($data))
 		);
 
-		$read = ServerData::read($data->write());
+		$read = ServerInfoCodec::decode(ServerInfoCodec::encode($data));
 		self::assertSame("a1b2c3", $read->nonce);
-		self::assertSame(ServerData::CONNECTION_TYPE_NETHERNET, $read->connectionType);
 	}
 
 	public function testReferenceEncodingIsReadBack() : void{
 		$bytes = hex2bin(self::REFERENCE);
 		self::assertIsString($bytes);
 
-		$data = ServerData::read($bytes);
+		$data = ServerInfoCodec::decode($bytes);
 
 		self::assertSame("server", $data->serverName);
 		self::assertSame(2181, $data->protocol);
-		self::assertSame("1.26.50", $data->version);
+		self::assertSame("1.26.50", $data->gameVersion);
 		self::assertSame("world", $data->levelName);
 		self::assertSame(GameType::ADVENTURE, $data->gameType);
 		self::assertSame(1, $data->playerCount);
@@ -104,20 +104,6 @@ final class ServerDataTest extends TestCase{
 		self::assertTrue($data->acceptsOnlineAuth);
 		self::assertTrue($data->acceptsSelfSignedAuth);
 		self::assertSame("nonce", $data->nonce);
-		self::assertSame(ServerData::CONNECTION_TYPE_NETHERNET, $data->connectionType);
-	}
-
-	/**
-	 * The protocol and game version come from the third and fourth pong fields.
-	 * Dropping them would advertise protocol 0 and an empty version for every host
-	 * configured from a pong.
-	 */
-	public function testPongDataCarriesTheProtocolAndVersion() : void{
-		$data = ServerData::fromPongData("MCPE;Dedicated Server;800;1.21.100;3;20;0;World;Creative;1;19132;19133;");
-		self::assertNotNull($data);
-
-		self::assertSame(800, $data->protocol);
-		self::assertSame("1.21.100", $data->version);
 	}
 
 	/**
@@ -126,51 +112,57 @@ final class ServerDataTest extends TestCase{
 	 */
 	public function testStringLengthsCountBytes() : void{
 		$name = "Café";
-		$written = (new ServerData(serverName: $name, protocol: 2181, version: "1.26.50", levelName: ""))->write();
+		$written = ServerInfoCodec::encode(new ServerInfo(serverName: $name, protocol: 2181, gameVersion: "1.26.50", levelName: ""));
 
 		//version, then the varint length of the UTF-8 bytes
 		self::assertSame(strlen($name), 5);
 		self::assertSame(chr(5), substr($written, 1, 1));
-		self::assertSame($name, ServerData::read($written)->serverName);
+		self::assertSame($name, ServerInfoCodec::decode($written)->serverName);
 	}
 
+	/**
+	 * A host may carry its server info across threads in this encoding, so a field it left out would be lost
+	 * without a sound. A field added to ServerInfo fails here until it is given a value below and survives the trip.
+	 */
 	public function testRoundTripPreservesEveryField() : void{
-		$data = new ServerData(
-			serverName: "a host",
-			protocol: 800,
-			version: "1.21.100",
-			levelName: "a world",
-			gameType: GameType::CREATIVE,
-			playerCount: 123,
-			maxPlayerCount: 200,
-			editorWorld: true,
-			hardcore: true,
-			acceptsOnlineAuth: false,
-			acceptsSelfSignedAuth: false,
-			connectionType: 0
-		);
+		$fields = [
+			"serverName" => "a host",
+			"protocol" => 800,
+			"gameVersion" => "1.21.100",
+			"levelName" => "a world",
+			"gameType" => GameType::CREATIVE,
+			"playerCount" => 123,
+			"maxPlayerCount" => 200,
+			"editorWorld" => true,
+			"hardcore" => true,
+			"acceptsOnlineAuth" => false,
+			"acceptsSelfSignedAuth" => false,
+			"nonce" => "abc"
+		];
+		self::assertCount(count($fields), (new \ReflectionMethod(ServerInfo::class, "__construct"))->getParameters());
+		$data = new ServerInfo(...$fields);
 
-		self::assertEquals($data, ServerData::read($data->write()));
+		self::assertEquals($data, ServerInfoCodec::decode(ServerInfoCodec::encode($data)));
 	}
 
 	/** The layout changes between versions, so an older one cannot be read at all. */
 	public function testWrongVersionIsRejected() : void{
-		$bytes = self::reference()->write();
+		$bytes = ServerInfoCodec::encode(self::reference());
 
 		$this->expectException(DiscoveryException::class);
-		ServerData::read(chr(4) . substr($bytes, 1));
+		ServerInfoCodec::decode(chr(4) . substr($bytes, 1));
 	}
 
 	public function testTrailingBytesAreRejected() : void{
 		$this->expectException(DiscoveryException::class);
-		ServerData::read(self::reference()->write() . "\x00");
+		ServerInfoCodec::decode(ServerInfoCodec::encode(self::reference()) . "\x00");
 	}
 
 	public function testTruncatedAdvertIsRejected() : void{
-		$bytes = self::reference()->write();
+		$bytes = ServerInfoCodec::encode(self::reference());
 
 		$this->expectException(DiscoveryException::class);
-		ServerData::read(substr($bytes, 0, 10));
+		ServerInfoCodec::decode(substr($bytes, 0, 10));
 	}
 
 	public function testUnknownGameTypeIsRejected() : void{
@@ -179,16 +171,16 @@ final class ServerDataTest extends TestCase{
 
 		$this->expectException(DiscoveryException::class);
 		$this->expectExceptionMessage("Unknown game type 8");
-		ServerData::read($bytes);
+		ServerInfoCodec::decode($bytes);
 	}
 
 	/** Empty names are legal, and produce a one-byte length of zero. */
 	public function testEmptyNamesAreAllowed() : void{
-		$data = new ServerData(serverName: "", protocol: 2181, version: "1.26.50", levelName: "");
-		$read = ServerData::read($data->write());
+		$data = new ServerInfo(serverName: "", protocol: 2181, gameVersion: "1.26.50", levelName: "");
+		$read = ServerInfoCodec::decode(ServerInfoCodec::encode($data));
 
 		self::assertSame("", $read->serverName);
 		self::assertSame("", $read->levelName);
-		self::assertSame("00", substr(bin2hex($data->write()), 2, 2));
+		self::assertSame("00", substr(bin2hex(ServerInfoCodec::encode($data)), 2, 2));
 	}
 }

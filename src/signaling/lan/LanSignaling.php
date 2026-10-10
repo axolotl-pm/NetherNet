@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\lan;
 
+use pocketmine\nethernet\info\ServerInfoProvider;
 use pocketmine\nethernet\negotiation\CandidateMode;
 use pocketmine\nethernet\negotiation\NegotiationException;
 use pocketmine\nethernet\negotiation\Negotiator;
@@ -90,7 +91,7 @@ final class LanSignaling implements Signaling{
 	 * @param int $networkId 64-bit unsigned integer identifying this host on the network.
 	 */
 	public function __construct(
-		private readonly ServerDataProvider $serverDataProvider,
+		private readonly ServerInfoProvider $infoProvider,
 		private readonly int $networkId,
 		private readonly InternetAddress $bindAddress = new InternetAddress("0.0.0.0", self::DEFAULT_PORT, 4),
 		private readonly int $maxConnections = self::DEFAULT_MAX_CONNECTIONS
@@ -210,7 +211,10 @@ final class LanSignaling implements Signaling{
 		}
 
 		if($packet instanceof RequestPacket){
-			$this->send(new ResponsePacket($this->serverDataProvider->getServerData()->write()), $address);
+			$info = $this->infoProvider->getServerInfo();
+			if($info !== null){
+				$this->send(new ResponsePacket(ServerInfoCodec::encode($info)), $address);
+			}
 
 			return;
 		}

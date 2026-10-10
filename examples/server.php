@@ -19,6 +19,8 @@ declare(strict_types=1);
 use pocketmine\nethernet\identity\PeerIdentity;
 use pocketmine\nethernet\identity\SelfSignedIdentityProvider;
 use pocketmine\nethernet\identity\ServerIdentity;
+use pocketmine\nethernet\info\MutableServerInfoProvider;
+use pocketmine\nethernet\info\ServerInfo;
 use pocketmine\nethernet\protocol\DisconnectReason;
 use pocketmine\nethernet\protocol\Reliability;
 use pocketmine\nethernet\server\NetherNetServer;
@@ -27,8 +29,6 @@ use pocketmine\nethernet\server\ServerEventListener;
 use pocketmine\nethernet\server\ServerInterface;
 use pocketmine\nethernet\signaling\http\HttpSignaling;
 use pocketmine\nethernet\signaling\lan\LanSignaling;
-use pocketmine\nethernet\signaling\lan\MutableServerDataProvider;
-use pocketmine\nethernet\signaling\lan\ServerData;
 use pocketmine\nethernet\utils\InternetAddress;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -79,16 +79,15 @@ $server = NetherNetServer::create($config, $listener);
 $listener->server = $server;
 
 // 3. Add signaling transports (HTTP and LAN)
-$server->addSignaling(new HttpSignaling(new InternetAddress('0.0.0.0', 19132, 4)));
-
-$serverDataProvider = new MutableServerDataProvider(
-	ServerData::fromPongData("MCPE;Dedicated Server;800;1.21.100;0;20;0;World;Survival;1;19132;19133;")
-		?? throw new RuntimeException('Malformed pong data')
-);
-$server->addSignaling(new LanSignaling(
-	serverDataProvider: $serverDataProvider,
-	networkId: 12345678
+$infoProvider = new MutableServerInfoProvider(new ServerInfo(
+	serverName: 'Dedicated Server',
+	protocol: 800,
+	gameVersion: '1.21.100',
+	levelName: 'World',
+	maxPlayerCount: 20
 ));
+$server->addSignaling(new HttpSignaling(new InternetAddress('0.0.0.0', 19132, 4), infoProvider: $infoProvider));
+$server->addSignaling(new LanSignaling($infoProvider, networkId: 12345678));
 
 // 4. Start the server and run the tick loop
 $server->start();
