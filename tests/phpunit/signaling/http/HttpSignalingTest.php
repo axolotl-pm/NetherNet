@@ -16,14 +16,16 @@ namespace pocketmine\nethernet\signaling\http;
 
 use PHPUnit\Framework\TestCase;
 use pocketmine\nethernet\FakeNegotiator;
-use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\negotiation\CandidateMode;
 use pocketmine\nethernet\negotiation\Negotiator;
 use pocketmine\nethernet\signaling\SignalingException;
+use pocketmine\nethernet\TestSignalingContext;
+use pocketmine\nethernet\utils\InternetAddress;
 use function fclose;
 use function feof;
 use function fread;
 use function fwrite;
+use function microtime;
 use function preg_match;
 use function random_int;
 use function str_contains;
@@ -64,10 +66,10 @@ final class HttpSignalingTest extends TestCase{
 	private function start(Negotiator $negotiator, ?ServerStatusProvider $statusProvider = null, ?ReverseProxy $reverseProxy = null) : void{
 		for($attempt = 0; $attempt < 20; ++$attempt){
 			$port = random_int(20000, 60000);
-			$signaling = new HttpSignaling($negotiator, new InternetAddress("127.0.0.1", $port, 4), statusProvider: $statusProvider, reverseProxy: $reverseProxy);
+			$signaling = new HttpSignaling(new InternetAddress("127.0.0.1", $port, 4), statusProvider: $statusProvider, reverseProxy: $reverseProxy);
 
 			try{
-				$signaling->start();
+				$signaling->start(TestSignalingContext::create($negotiator));
 			}catch(SignalingException){
 				continue;
 			}
@@ -101,7 +103,7 @@ final class HttpSignalingTest extends TestCase{
 
 		$response = "";
 		for($attempt = 0; $attempt < 400; ++$attempt){
-			$this->signaling?->tick();
+			$this->signaling?->tick(microtime(true));
 
 			$chunk = fread($client, 65536);
 			if($chunk !== false && $chunk !== ""){
@@ -241,13 +243,13 @@ final class HttpSignalingTest extends TestCase{
 	 * reference implementation sends.
 	 */
 	public function testFailedNegotiationIsReportedAsItsErrorCode() : void{
-		$this->start(new FakeNegotiator(null, failWith: \pocketmine\nethernet\negotiation\ErrorCode::ICE));
+		$this->start(new FakeNegotiator(null, failWith: \pocketmine\nethernet\protocol\ErrorCode::ICE));
 
 		$offer = "v=0\r\noffer\r\n";
 		$response = $this->exchange($this->connect(), "POST /v1/join/7 HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/sdp\r\nContent-Length: " . strlen($offer) . "\r\n\r\n" . $offer);
 
 		self::assertStringStartsWith("HTTP/1.1 500 ", $response);
-		self::assertStringEndsWith("\r\n\r\n" . \pocketmine\nethernet\negotiation\ErrorCode::ICE->value, $response);
+		self::assertStringEndsWith("\r\n\r\n" . \pocketmine\nethernet\protocol\ErrorCode::ICE->value, $response);
 	}
 
 	/** Speaking TLS to a plaintext listener is named rather than left to time out. */
@@ -270,7 +272,7 @@ final class HttpSignalingTest extends TestCase{
 
 		$firstResponse = "";
 		for($attempt = 0; $attempt < 200 && !str_contains($firstResponse, "\r\n\r\n"); ++$attempt){
-			$this->signaling?->tick();
+			$this->signaling?->tick(microtime(true));
 			$chunk = fread($first, 65536);
 			if($chunk !== false){
 				$firstResponse .= $chunk;
@@ -283,9 +285,20 @@ final class HttpSignalingTest extends TestCase{
 	}
 
 	public function testStartingTwiceIsRefused() : void{
-		$this->start(new FakeNegotiator("answer-sdp"));
+		$this->start($negotiator = new FakeNegotiator("answer-sdp"));
 
-		$this->expectException(SignalingException::class);
-		$this->signaling?->start();
+		$this->expectException(\LogicException::class);
+		$this->signaling?->start(TestSignalingContext::create($negotiator));
+	}
+
+	/**
+	 * A transport that came back after a shutdown would hold a listening socket that nothing ever services.
+	 */
+	public function testStartingAfterShutdownIsRefused() : void{
+		$this->start($negotiator = new FakeNegotiator("answer-sdp"));
+		$this->signaling?->shutdown();
+
+		$this->expectException(\LogicException::class);
+		$this->signaling?->start(TestSignalingContext::create($negotiator));
 	}
 }

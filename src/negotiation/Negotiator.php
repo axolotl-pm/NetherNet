@@ -32,7 +32,7 @@ interface Negotiator{
 	 */
 	public function beginNegotiation(string $offerSdp, string $networkId, CandidateMode $candidateMode = CandidateMode::BUNDLED, ?string $peerAddress = null) : Negotiation;
 
-	public function tick() : void;
+	public function tick(float $now) : void;
 
 	/**
 	 * Returns established connections ready to become active client sessions.

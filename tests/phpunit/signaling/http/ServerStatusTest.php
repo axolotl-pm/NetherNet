@@ -15,7 +15,7 @@ declare(strict_types=1);
 namespace pocketmine\nethernet\signaling\http;
 
 use PHPUnit\Framework\TestCase;
-use pocketmine\nethernet\discovery\GameType;
+use pocketmine\nethernet\info\GameType;
 use function json_decode;
 use const JSON_THROW_ON_ERROR;
 

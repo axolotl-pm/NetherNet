@@ -14,63 +14,69 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\session;
 
-use pmmp\webrtc\ConnectionState;
-use pmmp\webrtc\DataChannel;
-use pmmp\webrtc\PeerConnection;
-use pmmp\webrtc\WebRtcException;
-use pocketmine\nethernet\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\identity\PeerIdentity;
-use pocketmine\nethernet\InternetAddress;
-use pocketmine\nethernet\session\framing\Assembler;
-use pocketmine\nethernet\session\framing\FramingException;
-use pocketmine\nethernet\session\framing\Segmenter;
-use pocketmine\nethernet\WebRtcResources;
+use pocketmine\nethernet\protocol\DisconnectReason;
+use pocketmine\nethernet\protocol\framing\Assembler;
+use pocketmine\nethernet\protocol\framing\FramingException;
+use pocketmine\nethernet\protocol\framing\Segmenter;
+use pocketmine\nethernet\protocol\Reliability;
+use pocketmine\nethernet\transport\ChannelPair;
+use pocketmine\nethernet\transport\ConnectionBudgetConfiguration;
+use pocketmine\nethernet\transport\PeerTransport;
+use pocketmine\nethernet\transport\TransportException;
+use pocketmine\nethernet\transport\TransportState;
+use pocketmine\nethernet\utils\InternetAddress;
+use function array_slice;
 use function count;
-use function microtime;
+use function strlen;
 
+/**
+ * @internal
+ */
 final class Session{
 
-	/**
-	 * Timeout in seconds to flush queued outgoing data before disconnecting.
-	 */
+	/** Timeout in seconds to flush queued outgoing data before disconnecting. */
 	public const DISCONNECT_FLUSH_TIMEOUT = 2.0;
 
-	/** @phpstan-var array<string, DataChannel> */
-	private readonly array $channels;
-
-	/**
-	 * @var Assembler[]
-	 * @phpstan-var array<string, Assembler>
-	 */
+	/** @phpstan-var array<string, Assembler> keyed by Reliability case name */
 	private readonly array $assemblers;
 
-	private bool $closed = false;
+	private SessionState $state = SessionState::CONNECTED;
+	/** Why the session is disconnecting or has disconnected. */
 	private ?DisconnectReason $disconnectReason = null;
 
-	private ?DisconnectReason $pendingDisconnect = null;
-	private float $disconnectDeadline = 0.0;
+	private int $reportedBytesSent = 0;
+	private int $reportedBytesReceived = 0;
+	private ?int $reportedPing = null;
+
+	/** @phpstan-var array<string, int> bytes handed to each channel so far, keyed by Reliability case name */
+	private array $queuedBytes = [];
 
 	/**
-	 * @phpstan-param array<string, DataChannel> $channels
+	 * Receipts not yet acknowledged, oldest first, each with the queued byte count its packet ended at.
+	 * @phpstan-var array<string, list<array{int, int}>>
 	 */
+	private array $pendingReceipts = [];
+
+	/** Measured from the first update that finds the disconnect pending. */
+	private ?float $disconnectDeadline = null;
+
 	public function __construct(
 		private readonly int $id,
-		private readonly PeerConnection $peerConnection,
-		array $channels,
+		private readonly PeerTransport $transport,
+		private readonly ChannelPair $channels,
 		private readonly string $networkId,
+		private readonly InternetAddress $address,
 		private readonly ?PeerIdentity $identity,
 		private readonly Segmenter $segmenter,
 		private readonly ConnectionBudgetConfiguration $budget
 	){
 		$assemblers = [];
 		foreach(Reliability::cases() as $reliability){
-			if(!isset($channels[$reliability->name])){
-				throw new \InvalidArgumentException("Missing required channel: " . $reliability->getChannelLabel());
-			}
 			$assemblers[$reliability->name] = new Assembler($reliability->isFragmentationSupported(), $budget->maxPayloadSize);
+			$this->queuedBytes[$reliability->name] = 0;
+			$this->pendingReceipts[$reliability->name] = [];
 		}
-
-		$this->channels = $channels;
 		$this->assemblers = $assemblers;
 	}
 
@@ -78,64 +84,99 @@ final class Session{
 
 	public function getNetworkId() : string{ return $this->networkId; }
 
-	/**
-	 * Returns the verified cryptographic identity of the peer, or null if connected without an assertion.
-	 */
 	public function getIdentity() : ?PeerIdentity{ return $this->identity; }
 
-	public function getRemoteAddress() : ?InternetAddress{
-		$address = $this->closed ? null : $this->peerConnection->getRemoteAddress();
+	public function getRemoteAddress() : InternetAddress{ return $this->address; }
 
-		return $address === null ? null : InternetAddress::parse($address);
-	}
+	public function isConnected() : bool{ return $this->state === SessionState::CONNECTED; }
 
-	public function getState() : ConnectionState{
-		return $this->peerConnection->getState();
-	}
-
-	public function isClosed() : bool{ return $this->closed; }
+	public function isFullyDisconnected() : bool{ return $this->state === SessionState::DISCONNECTED; }
 
 	public function getDisconnectReason() : ?DisconnectReason{ return $this->disconnectReason; }
 
 	/**
+	 * Queues a packet for the peer. Packets sent after a disconnect was initiated are dropped.
+	 * @throws \InvalidArgumentException
 	 * @throws SessionException
-	 * @throws FramingException
 	 */
-	public function send(string $payload, Reliability $reliability = Reliability::RELIABLE) : void{
-		$this->requireOpen();
-
-		$segments = $this->segmenter->segment($payload);
-		if(count($segments) === 0){
+	public function send(string $payload, Reliability $reliability = Reliability::RELIABLE, ?int $receiptId = null) : void{
+		if($this->state === SessionState::DISCONNECT_PENDING){
 			return;
 		}
+		$this->requireOpen();
+
+		try{
+			$segments = $this->segmenter->segment($payload);
+		}catch(FramingException $e){
+			throw new \InvalidArgumentException($e->getMessage(), 0, $e);
+		}
 		if(count($segments) > 1 && !$reliability->isFragmentationSupported()){
-			throw new SessionException("Payload requires " . count($segments) . " segments, but " . $reliability->getChannelLabel() . " does not support fragmentation");
+			throw new \InvalidArgumentException("Payload requires " . count($segments) . " segments, but " . $reliability->getChannelLabel() . " does not support fragmentation");
 		}
 
 		try{
-			$channel = $this->channels[$reliability->name];
+			$channel = $this->channels->get($reliability);
 			foreach($segments as $segment){
 				$channel->send($segment);
+				$this->queuedBytes[$reliability->name] += strlen($segment);
 			}
-		}catch(WebRtcException $e){
-			$this->close(DisconnectReason::SEND_FAILED);
+		}catch(TransportException $e){
+			$this->forciblyDisconnect(DisconnectReason::SEND_FAILED);
 
 			throw new SessionException("Failed to send on channel " . $reliability->getChannelLabel() . ": " . $e->getMessage(), 0, $e);
 		}
-	}
 
-	public function getBufferedAmount(Reliability $reliability = Reliability::RELIABLE) : int{
-		return $this->closed ? 0 : $this->channels[$reliability->name]->getBufferedAmount();
+		if($receiptId !== null){
+			$this->pendingReceipts[$reliability->name][] = [$receiptId, $this->queuedBytes[$reliability->name]];
+		}
 	}
 
 	/**
+	 * @return int[]
+	 * @phpstan-return list<int>
+	 */
+	public function takeAcknowledgedReceipts() : array{
+		if($this->state === SessionState::DISCONNECTED){
+			return [];
+		}
+
+		$acknowledged = [];
+		foreach(Reliability::cases() as $reliability){
+			$pending = $this->pendingReceipts[$reliability->name];
+			if(count($pending) === 0){
+				continue;
+			}
+
+			$delivered = $this->queuedBytes[$reliability->name] - $this->channels->get($reliability)->getBufferedAmount();
+			$taken = 0;
+			foreach($pending as [$receiptId, $watermark]){
+				if($watermark > $delivered){
+					break;
+				}
+				$acknowledged[] = $receiptId;
+				++$taken;
+			}
+			if($taken > 0){
+				$this->pendingReceipts[$reliability->name] = array_slice($pending, $taken);
+			}
+		}
+
+		return $acknowledged;
+	}
+
+	public function getBufferedAmount(Reliability $reliability = Reliability::RELIABLE) : int{
+		return $this->isFullyDisconnected() ? 0 : $this->channels->get($reliability)->getBufferedAmount();
+	}
+
+	/**
+	 * @internal
 	 * @throws SessionException
 	 */
 	public function receive() : ?ReceivedMessage{
 		$this->requireOpen();
 
 		foreach(Reliability::cases() as $reliability){
-			$channel = $this->channels[$reliability->name];
+			$channel = $this->channels->get($reliability);
 			$assembler = $this->assemblers[$reliability->name];
 
 			try{
@@ -145,8 +186,8 @@ final class Session{
 						return new ReceivedMessage($reliability, $payload);
 					}
 				}
-			}catch(FramingException|WebRtcException $e){
-				$this->close(DisconnectReason::BAD_DATA);
+			}catch(FramingException|TransportException $e){
+				$this->forciblyDisconnect(DisconnectReason::BAD_DATA);
 
 				throw new SessionException("Bad data on channel " . $reliability->getChannelLabel() . ": " . $e->getMessage(), 0, $e);
 			}
@@ -156,151 +197,137 @@ final class Session{
 	}
 
 	/**
-	 * Returns an amount of bytes sent over the network for this session.
+	 * @phpstan-return array{int, int} bytes sent and received since the last call
 	 */
-	public function getBytesSent() : int{
-		if($this->closed){
-			return 0;
-		}
-		return $this->peerConnection->getBytesSent();
+	public function takeBandwidth() : array{
+		$sent = $this->transport->getBytesSent();
+		$received = $this->transport->getBytesReceived();
+		$diff = [$sent - $this->reportedBytesSent, $received - $this->reportedBytesReceived];
+		$this->reportedBytesSent = $sent;
+		$this->reportedBytesReceived = $received;
+
+		return $diff;
 	}
 
 	/**
-	 * Returns an amount of bytes received over the network for this session.
+	 * Returns the round trip time in milliseconds if it differs from what the last call returned.
 	 */
-	public function getBytesReceived() : int{
-		if($this->closed){
-			return 0;
-		}
-		return $this->peerConnection->getBytesReceived();
-	}
-
-	/**
-	 * Returns the round trip time to the peer in milliseconds, or null before SCTP has measured one.
-	 */
-	public function getRoundTripTime() : ?int{
-		if($this->closed){
+	public function takePingChange() : ?int{
+		$ping = $this->transport->getRoundTripTime();
+		if($ping === null || $ping === $this->reportedPing){
 			return null;
 		}
-		return $this->peerConnection->getRoundTripTime();
+
+		return $this->reportedPing = $ping;
 	}
 
-	public function checkLiveness() : bool{
-		if($this->closed){
-			return false;
+	/** @internal */
+	public function update(float $now) : void{
+		if($this->state === SessionState::DISCONNECTED){
+			return;
 		}
 
-		$state = $this->peerConnection->getState();
-		if($state === ConnectionState::FAILED){
-			$this->close(DisconnectReason::CONNECTION_FAILED);
+		$transportState = $this->transport->getState();
+		if($transportState === TransportState::FAILED){
+			$this->forciblyDisconnect(DisconnectReason::CONNECTION_FAILED);
 
-			return false;
+			return;
 		}
 
-		if($this->pendingDisconnect !== null){
-			if($this->bufferedBytes() === 0 || $state !== ConnectionState::CONNECTED || microtime(true) >= $this->disconnectDeadline){
-				$this->close($this->pendingDisconnect);
-
-				return false;
+		if($this->state === SessionState::DISCONNECT_PENDING){
+			$this->disconnectDeadline ??= $now + self::DISCONNECT_FLUSH_TIMEOUT;
+			if($this->bufferedBytes() === 0 || $transportState !== TransportState::CONNECTED || $now >= $this->disconnectDeadline){
+				$this->forciblyDisconnect($this->disconnectReason ?? DisconnectReason::SERVER_DISCONNECT);
 			}
 
-			return true;
+			return;
 		}
 
 		/* Check queue limits before channel closures so flooding is reported accurately. */
 		$queuedBytes = 0;
 		$queuedMessages = 0;
-		$buffered = 0;
-		foreach($this->channels as $channel){
+		foreach($this->channels->all() as $channel){
 			$queuedBytes += $channel->getAvailableAmount();
 			$queuedMessages += $channel->getQueuedMessageCount();
-			$buffered += $channel->getBufferedAmount();
 		}
 		if($queuedBytes > $this->budget->maxReceiveQueueSize){
-			$this->close(DisconnectReason::RECEIVE_QUEUE_TOO_MANY_BYTES);
+			$this->forciblyDisconnect(DisconnectReason::RECEIVE_QUEUE_TOO_MANY_BYTES);
 
-			return false;
+			return;
 		}
 		if($queuedMessages > $this->budget->maxReceiveQueueMessages){
-			$this->close(DisconnectReason::RECEIVE_QUEUE_TOO_MANY_MESSAGES);
+			$this->forciblyDisconnect(DisconnectReason::RECEIVE_QUEUE_TOO_MANY_MESSAGES);
 
-			return false;
+			return;
 		}
-		if($buffered > $this->budget->maxSendQueueSize){
-			$this->close(DisconnectReason::SEND_QUEUE_TOO_MANY_BYTES);
+		if($this->bufferedBytes() > $this->budget->maxSendQueueSize){
+			$this->forciblyDisconnect(DisconnectReason::SEND_QUEUE_TOO_MANY_BYTES);
 
-			return false;
-		}
-
-		if($state === ConnectionState::CLOSED){
-			$this->close($this->getTransportDisconnectReason());
-
-			return false;
-		}
-		foreach(Reliability::cases() as $reliability){
-			if($this->channels[$reliability->name]->isClosed()){
-				$this->close($this->getTransportDisconnectReason());
-
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	/**
-	 * Determines the disconnect reason from the transport failure state.
-	 * Distinguishes ICE consent failures (FAILED) from clean or unclassified closures (CLOSED/DISCONNECTED).
-	 */
-	private function getTransportDisconnectReason() : DisconnectReason{
-		return $this->peerConnection->getFailureState() === ConnectionState::FAILED ? DisconnectReason::CONNECTION_FAILED : DisconnectReason::PEER_DISCONNECT;
-	}
-
-	/**
-	 * Requests a graceful disconnect after pending outgoing data is sent.
-	 */
-	public function initiateDisconnect(DisconnectReason $reason) : void{
-		if($this->closed || $this->pendingDisconnect !== null){
 			return;
 		}
 
-		$this->pendingDisconnect = $reason;
-		$this->disconnectDeadline = microtime(true) + self::DISCONNECT_FLUSH_TIMEOUT;
+		if($transportState === TransportState::CLOSED || $this->hasClosedChannel()){
+			$this->forciblyDisconnect($this->getTransportDisconnectReason());
+		}
+	}
+
+	private function hasClosedChannel() : bool{
+		foreach($this->channels->all() as $channel){
+			if($channel->isClosed()){
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function getTransportDisconnectReason() : DisconnectReason{
+		return $this->transport->hasLostConnectivity() ? DisconnectReason::CONNECTION_FAILED : DisconnectReason::PEER_DISCONNECT;
+	}
+
+	public function initiateDisconnect(DisconnectReason $reason) : void{
+		if($this->state !== SessionState::CONNECTED){
+			return;
+		}
+
+		$this->state = SessionState::DISCONNECT_PENDING;
+		$this->disconnectReason = $reason;
 	}
 
 	private function bufferedBytes() : int{
 		$buffered = 0;
-		foreach($this->channels as $channel){
+		foreach($this->channels->all() as $channel){
 			$buffered += $channel->getBufferedAmount();
 		}
 
 		return $buffered;
 	}
 
-	public function close(DisconnectReason $reason = DisconnectReason::SERVER_DISCONNECT) : void{
-		if($this->closed){
+	/** Closes the transport immediately, discarding anything still queued. The first reason given is the one kept. */
+	public function forciblyDisconnect(DisconnectReason $reason) : void{
+		if($this->state === SessionState::DISCONNECTED){
 			return;
 		}
-		$this->closed = true;
+		$this->state = SessionState::DISCONNECTED;
 		$this->disconnectReason = $reason;
 
-		foreach($this->channels as $channel){
-			WebRtcResources::closeQuietly($channel);
+		foreach($this->channels->all() as $channel){
+			$channel->close();
 		}
-		WebRtcResources::closeQuietly($this->peerConnection);
+		$this->transport->close();
 	}
 
 	/**
 	 * @throws SessionException
 	 */
 	private function requireOpen() : void{
-		if($this->closed){
+		if($this->state === SessionState::DISCONNECTED){
 			throw new SessionException("Session is closed" . ($this->disconnectReason !== null ? ": " . $this->disconnectReason->getMessage() : ""));
 		}
-		foreach($this->channels as $channel){
-			if($channel->isClosed()){
-				throw new SessionException("DataChannel of current session is closed");
-			}
+		if($this->hasClosedChannel()){
+			$this->forciblyDisconnect($this->getTransportDisconnectReason());
+
+			throw new SessionException("Data channel of the session is closed");
 		}
 	}
 }

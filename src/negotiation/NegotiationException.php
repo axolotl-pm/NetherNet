@@ -15,6 +15,7 @@ declare(strict_types=1);
 namespace pocketmine\nethernet\negotiation;
 
 use pocketmine\nethernet\NetherNetException;
+use pocketmine\nethernet\protocol\ErrorCode;
 
 class NegotiationException extends NetherNetException{
 

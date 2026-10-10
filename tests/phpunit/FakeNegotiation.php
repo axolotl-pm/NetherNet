@@ -14,8 +14,8 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet;
 
-use pocketmine\nethernet\negotiation\ErrorCode;
 use pocketmine\nethernet\negotiation\Negotiation;
+use pocketmine\nethernet\protocol\ErrorCode;
 
 /**
  * A negotiation whose answer, candidates and outcome are all decided up front.

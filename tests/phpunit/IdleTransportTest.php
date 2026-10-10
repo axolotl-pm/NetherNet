@@ -15,14 +15,16 @@ declare(strict_types=1);
 namespace pocketmine\nethernet;
 
 use PHPUnit\Framework\TestCase;
-use pocketmine\nethernet\discovery\FixedServerDataProvider;
-use pocketmine\nethernet\discovery\LanSignaling;
-use pocketmine\nethernet\discovery\ServerData;
 use pocketmine\nethernet\signaling\http\HttpSignaling;
+use pocketmine\nethernet\signaling\lan\FixedServerDataProvider;
+use pocketmine\nethernet\signaling\lan\LanSignaling;
+use pocketmine\nethernet\signaling\lan\ServerData;
+use pocketmine\nethernet\signaling\Signaling;
 use pocketmine\nethernet\signaling\SignalingException;
-use pocketmine\nethernet\signaling\SignalingInterface;
+use pocketmine\nethernet\utils\InternetAddress;
 use function count;
 use function implode;
+use function microtime;
 use function random_int;
 
 /**
@@ -42,21 +44,21 @@ final class IdleTransportTest extends TestCase{
 
 	private const IDLE_PASSES = 25;
 
-	private ?SignalingInterface $signaling = null;
+	private ?Signaling $signaling = null;
 
 	protected function tearDown() : void{
 		$this->signaling?->shutdown();
 	}
 
 	/**
-	 * @phpstan-param \Closure(int) : SignalingInterface $factory
+	 * @phpstan-param \Closure(int) : Signaling $factory
 	 */
-	private function startOnAFreePort(\Closure $factory) : SignalingInterface{
+	private function startOnAFreePort(\Closure $factory, \Logger $logger) : Signaling{
 		for($attempt = 0; $attempt < 25; ++$attempt){
 			$signaling = $factory(random_int(20000, 60000));
 
 			try{
-				$signaling->start();
+				$signaling->start(TestSignalingContext::create(new FakeNegotiator("answer-sdp"), $logger));
 			}catch(SignalingException){
 				//this machine reserves scattered port ranges; just pick again
 				continue;
@@ -71,14 +73,11 @@ final class IdleTransportTest extends TestCase{
 	public function testIdleHttpSignalingLogsNothing() : void{
 		$logger = new RecordingLogger();
 		$signaling = $this->startOnAFreePort(fn(int $port) => new HttpSignaling(
-			new FakeNegotiator("answer-sdp"),
-			new InternetAddress("127.0.0.1", $port, 4),
-			null,
-			$logger
-		));
+			new InternetAddress("127.0.0.1", $port, 4)
+		), $logger);
 
 		for($i = 0; $i < self::IDLE_PASSES; ++$i){
-			$signaling->tick();
+			$signaling->tick(microtime(true));
 		}
 
 		self::assertSame([], $logger->messages, "an idle listener logged: " . implode(" | ", $logger->messages));
@@ -87,19 +86,17 @@ final class IdleTransportTest extends TestCase{
 	public function testIdleLanSignalingLogsNothingBeyondItsStartupLine() : void{
 		$logger = new RecordingLogger();
 		$signaling = $this->startOnAFreePort(fn(int $port) => new LanSignaling(
-			new FakeNegotiator("answer-sdp"),
 			new FixedServerDataProvider(new ServerData(serverName: "host", protocol: 2181, version: "1.26.50", levelName: "world")),
 			4242,
-			new InternetAddress("127.0.0.1", $port, 4),
-			$logger
-		));
+			new InternetAddress("127.0.0.1", $port, 4)
+		), $logger);
 
 		//one line is written when the socket comes up, and nothing after it
 		$afterStart = count($logger->messages);
 		self::assertSame(1, $afterStart);
 
 		for($i = 0; $i < self::IDLE_PASSES; ++$i){
-			$signaling->tick();
+			$signaling->tick(microtime(true));
 		}
 
 		self::assertCount($afterStart, $logger->messages, "an idle listener logged: " . implode(" | ", $logger->messages));

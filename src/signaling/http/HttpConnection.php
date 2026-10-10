@@ -14,8 +14,8 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\http;
 
-use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\negotiation\Negotiation;
+use pocketmine\nethernet\utils\InternetAddress;
 
 /**
  * Tracks the state of an inbound HTTP/HTTPS signaling connection.
@@ -49,8 +49,8 @@ final class HttpConnection{
 	public float $writeDeadline = 0.0;
 
 	/**
-	 * @param resource $stream      Accepted stream resource for TLS and I/O.
-	 * @param \Socket  $socket      Underlying socket reference preventing premature descriptor closure.
+	 * @param resource             $stream      Accepted stream resource for TLS and I/O.
+	 * @param \Socket              $socket      Underlying socket reference preventing premature descriptor closure.
 	 * @param InternetAddress|null $peerAddress Address of the peer, or null if it could not be read.
 	 */
 	public function __construct(

@@ -14,21 +14,21 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\negotiation;
 
-use pmmp\webrtc\DataChannel;
-use pmmp\webrtc\PeerConnection;
 use pocketmine\nethernet\identity\PeerIdentity;
-use pocketmine\nethernet\session\Reliability;
+use pocketmine\nethernet\transport\ChannelPair;
+use pocketmine\nethernet\transport\PeerTransport;
+use pocketmine\nethernet\utils\InternetAddress;
 
+/**
+ * Whoever takes it from the negotiator owns the transport and must close it.
+ */
 final class EstablishedPeer{
 
-	/**
-	 * @param DataChannel[] $channels Keyed by {@link Reliability} case name.
-	 * @phpstan-param array<string, DataChannel> $channels
-	 */
 	public function __construct(
-		public readonly PeerConnection $peerConnection,
-		public readonly array $channels,
+		public readonly PeerTransport $transport,
+		public readonly ChannelPair $channels,
 		public readonly string $networkId,
+		public readonly InternetAddress $address,
 		public readonly ?PeerIdentity $identity
 	){}
 }

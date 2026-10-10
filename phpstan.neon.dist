@@ -12,6 +12,7 @@ parameters:
 	paths:
 		- src
 		- tests/phpunit
+		- examples
 
 	# stubFiles only replaces the type information for symbols PHP already knows
 	# about, so on a machine without ext-webrtc every class in it is simply absent.

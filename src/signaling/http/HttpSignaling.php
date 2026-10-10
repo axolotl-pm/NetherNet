@@ -14,13 +14,15 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\http;
 
-use pocketmine\nethernet\AddressBlockTracker;
 use pocketmine\nethernet\crypto\OpenSsl;
-use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\negotiation\NegotiationException;
 use pocketmine\nethernet\negotiation\Negotiator;
+use pocketmine\nethernet\signaling\Signaling;
+use pocketmine\nethernet\signaling\SignalingContext;
 use pocketmine\nethernet\signaling\SignalingException;
-use pocketmine\nethernet\signaling\SignalingInterface;
+use pocketmine\nethernet\signaling\SignalingState;
+use pocketmine\nethernet\utils\AddressBlockList;
+use pocketmine\nethernet\utils\InternetAddress;
 use function bin2hex;
 use function count;
 use function fclose;
@@ -32,7 +34,6 @@ use function is_file;
 use function is_readable;
 use function is_resource;
 use function is_string;
-use function microtime;
 use function min;
 use function preg_replace;
 use function rawurldecode;
@@ -78,7 +79,7 @@ use const STREAM_PEEK;
  * - `GET /v1/join`: Capability probe returning HTTP 2xx and optional server status.
  * - `POST /v1/join/{networkId}`: SDP offer exchange returning the server's SDP answer.
  */
-final class HttpSignaling implements SignalingInterface{
+final class HttpSignaling implements Signaling{
 
 	public const PATH_JOIN = "/v1/join";
 	public const CONTENT_TYPE_SDP = "application/sdp";
@@ -108,21 +109,25 @@ final class HttpSignaling implements SignalingInterface{
 	 */
 	private array $connections = [];
 
-	private AddressBlockTracker $blockTracker;
-
 	private int $nextConnectionId = 0;
-	private bool $shutDown = false;
+	private SignalingState $state = SignalingState::CREATED;
+
+	/** Time of the tick being processed; every deadline in a tick is measured against it. */
+	private float $now = 0.0;
+
+	/* Collaborators handed over by the server in start(); nothing reads them before that. */
+	private Negotiator $negotiator;
+	private AddressBlockList $blockList;
+	private \Logger $logger;
 
 	/**
-	 * @param array<string, mixed>|null $tlsContext SSL context options for HTTPS support (TLS trust anchor).
+	 * @param array<string, mixed>|null $tlsContext     SSL context options for HTTPS support, carrying the server certificate and key (`local_cert`, `local_pk`).
 	 * @param ServerStatusProvider|null $statusProvider Provider for capability probe (`GET /v1/join`) responses.
-	 * @param ReverseProxy|null         $reverseProxy Reverse proxy configuration for resolving client IP addresses.
+	 * @param ReverseProxy|null         $reverseProxy   Reverse proxy configuration for resolving client IP addresses.
 	 */
 	public function __construct(
-		private readonly Negotiator $negotiator,
 		private readonly InternetAddress $bindAddress,
 		private readonly ?array $tlsContext = null,
-		private readonly ?\Logger $logger = null,
 		private readonly int $maxConnections = self::DEFAULT_MAX_CONNECTIONS,
 		private readonly ?ServerStatusProvider $statusProvider = null,
 		private readonly ?ReverseProxy $reverseProxy = null
@@ -130,18 +135,10 @@ final class HttpSignaling implements SignalingInterface{
 		if($maxConnections < 1){
 			throw new \InvalidArgumentException("Maximum connections must be positive, got $maxConnections");
 		}
-
-		$this->blockTracker = new AddressBlockTracker();
 	}
 
-	public function setAddressBlockTracker(AddressBlockTracker $blockTracker) : void{
-		$this->blockTracker = $blockTracker;
-	}
-
-	public function start() : void{
-		if($this->socket !== null){
-			throw new SignalingException("Already listening");
-		}
+	public function start(SignalingContext $context) : void{
+		$this->state->checkCanStart();
 
 		$this->checkTlsFilesReadable();
 
@@ -171,6 +168,10 @@ final class HttpSignaling implements SignalingInterface{
 
 		socket_set_nonblock($socket);
 		$this->socket = $socket;
+		$this->negotiator = $context->negotiator;
+		$this->blockList = $context->blockList;
+		$this->logger = new \PrefixedLogger($context->logger, "HTTP signaling");
+		$this->state = SignalingState::STARTED;
 	}
 
 	/**
@@ -203,7 +204,7 @@ final class HttpSignaling implements SignalingInterface{
 
 		$stream = socket_export_stream($socket);
 		if($stream === false){
-			$this->logger?->debug("Could not read the accepted socket as a stream; dropping " . ($peerAddress?->toString() ?? "unknown"));
+			$this->logger->debug("Could not read the accepted socket as a stream; dropping " . ($peerAddress?->toString() ?? "unknown"));
 			socket_close($socket);
 
 			return null;
@@ -231,13 +232,13 @@ final class HttpSignaling implements SignalingInterface{
 	/**
 	 * Accepts incoming connections and processes pending requests and responses.
 	 */
-	public function tick() : void{
+	public function tick(float $now) : void{
 		$socket = $this->socket;
-		if($this->shutDown || $socket === null){
+		if($this->state !== SignalingState::STARTED || $socket === null){
 			return;
 		}
 
-		$now = microtime(true);
+		$this->now = $now;
 
 		socket_clear_error();
 
@@ -246,13 +247,13 @@ final class HttpSignaling implements SignalingInterface{
 			$peerPort = 0;
 			$peerAddress = @socket_getpeername($accepted, $peerIp, $peerPort) ? new InternetAddress($peerIp, $peerPort, $this->bindAddress->version) : null;
 
-			if($peerAddress !== null && $this->blockTracker->isBlocked($peerAddress->ip)){
-				$this->logger?->debug("Dropped a signaling connection from blocked address $peerAddress->ip");
+			if($peerAddress !== null && $this->blockList->isBlocked($peerAddress->ip)){
+				$this->logger->debug("Dropped a signaling connection from blocked address $peerAddress->ip");
 				socket_close($accepted);
 				continue;
 			}
 			if(count($this->connections) >= $this->maxConnections && !$this->evictStalest()){
-				$this->logger?->debug("Refused signaling connection: connection limit of $this->maxConnections reached");
+				$this->logger->debug("Refused signaling connection: connection limit of $this->maxConnections reached");
 				socket_close($accepted);
 				continue;
 			}
@@ -262,13 +263,13 @@ final class HttpSignaling implements SignalingInterface{
 				continue;
 			}
 
-			$this->logger?->debug("Signaling connection opened from " . $connection->peerName());
+			$this->logger->debug("Signaling connection opened from " . $connection->peerName());
 			$this->connections[$this->nextConnectionId++] = $connection;
 		}
 
 		$errno = socket_last_error();
 		if($errno !== 0 && $errno !== SOCKET_EWOULDBLOCK){
-			$this->logger?->debug("Accept failed: " . socket_strerror($errno));
+			$this->logger->warning("Accept failed: " . socket_strerror($errno));
 		}
 		socket_clear_error();
 
@@ -276,10 +277,11 @@ final class HttpSignaling implements SignalingInterface{
 			try{
 				$this->processConnection($connection, $now);
 			}catch(HttpException $e){
-				$this->logger?->debug($connection->peerName() . ": " . $e->getMessage());
+				$this->logger->debug($connection->peerName() . ": " . $e->getMessage());
 				$this->respond($connection, $e->getStatusCode(), "");
 			}catch(\Throwable $e){
-				$this->logger?->debug($connection->peerName() . ": unhandled " . $e::class . ": " . $e->getMessage());
+				$this->logger->error($connection->peerName() . ": unhandled " . $e::class . ": " . $e->getMessage());
+				$this->logger->logException($e);
 				$this->respond($connection, 500, "");
 			}
 
@@ -291,10 +293,10 @@ final class HttpSignaling implements SignalingInterface{
 	}
 
 	public function shutdown() : void{
-		if($this->shutDown){
+		if($this->state === SignalingState::SHUT_DOWN){
 			return;
 		}
-		$this->shutDown = true;
+		$this->state = SignalingState::SHUT_DOWN;
 
 		foreach($this->connections as $connection){
 			$this->disconnect($connection);
@@ -417,7 +419,7 @@ final class HttpSignaling implements SignalingInterface{
 					return;
 				}
 				if($negotiation->isFailed()){
-					$this->logger?->debug($connection->peerName() . ": negotiation failed: " . ($negotiation->getFailureReason() ?? "no reason given"));
+					$this->logger->debug($connection->peerName() . ": negotiation failed: " . ($negotiation->getFailureReason() ?? "no reason given"));
 					$this->respond($connection, 500, (string) $negotiation->getFailureCode()->value, self::CONTENT_TYPE_TEXT);
 
 					return;
@@ -430,7 +432,7 @@ final class HttpSignaling implements SignalingInterface{
 			case HttpConnectionState::WRITING:
 				$this->flush($connection);
 				if($connection->state === HttpConnectionState::WRITING && $now > $connection->writeDeadline){
-					$this->logger?->debug($connection->peerName() . ": timed out sending the response");
+					$this->logger->debug($connection->peerName() . ": timed out sending the response");
 					$connection->state = HttpConnectionState::DONE;
 				}
 				return;
@@ -490,11 +492,11 @@ final class HttpSignaling implements SignalingInterface{
 		if($peerAddress !== null && $this->reverseProxy !== null && $this->reverseProxy->trusts($peerAddress)){
 			$peerAddress = $this->reverseProxy->clientAddress($request);
 			if($peerAddress === null){
-				$this->logger?->debug($connection->peerName() . ": no client address in the proxy headers");
+				$this->logger->debug($connection->peerName() . ": no client address in the proxy headers");
 			}
 		}
-		if($peerAddress !== null && $this->blockTracker->isBlocked($peerAddress)){
-			$this->logger?->debug($connection->peerName() . ": dropped a request from $peerAddress, which is blocked");
+		if($peerAddress !== null && $this->blockList->isBlocked($peerAddress)){
+			$this->logger->debug($connection->peerName() . ": dropped a request from $peerAddress, which is blocked");
 			$connection->state = HttpConnectionState::DONE;
 
 			return;
@@ -524,7 +526,7 @@ final class HttpSignaling implements SignalingInterface{
 		try{
 			$status = $this->statusProvider?->getServerStatus()?->toJson();
 		}catch(\Throwable $e){
-			$this->logger?->debug("Could not build the server status: " . $e->getMessage());
+			$this->logger->debug("Could not build the server status: " . $e->getMessage());
 		}
 
 		if($status === null){
@@ -545,7 +547,7 @@ final class HttpSignaling implements SignalingInterface{
 			return;
 		}
 
-		$this->logger?->debug(
+		$this->logger->debug(
 			$connection->peerName() . ": " .
 			($connection->request === null ? "<unparsed request>" : $connection->request->method . " " . $connection->request->getPath()) .
 			" -> $statusCode " . self::getReasonPhrase($statusCode)
@@ -563,7 +565,7 @@ final class HttpSignaling implements SignalingInterface{
 
 		$connection->output = $head . ($connection->request?->method === "HEAD" ? "" : $body);
 		$connection->state = HttpConnectionState::WRITING;
-		$connection->writeDeadline = microtime(true) + self::WRITE_TIMEOUT;
+		$connection->writeDeadline = $this->now + self::WRITE_TIMEOUT;
 
 		$this->flush($connection);
 	}
@@ -684,7 +686,7 @@ final class HttpSignaling implements SignalingInterface{
 		}
 
 		if($connection->input !== ""){
-			$this->logger?->debug($connection->peerName() . ": closed the connection after " . strlen($connection->input) . " bytes of a request");
+			$this->logger->debug($connection->peerName() . ": closed the connection after " . strlen($connection->input) . " bytes of a request");
 		}
 		$connection->state = HttpConnectionState::DONE;
 
@@ -719,7 +721,7 @@ final class HttpSignaling implements SignalingInterface{
 			return false;
 		}
 
-		$this->logger?->debug("Evicting stalest signaling connection (" . $this->connections[$stalestId]->peerName() . ") to accommodate new connection");
+		$this->logger->debug("Evicting stalest signaling connection (" . $this->connections[$stalestId]->peerName() . ") to accommodate new connection");
 		$this->disconnect($this->connections[$stalestId]);
 		unset($this->connections[$stalestId]);
 

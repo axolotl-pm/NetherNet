@@ -1,0 +1,35 @@
+<?php
+
+/*
+ * This file is part of NetherNet.
+ * Copyright (C) 2026 Axolotl Team <https://github.com/axolotl-pm/NetherNet>
+ *
+ * NetherNet is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
+
+declare(strict_types=1);
+
+namespace pocketmine\nethernet\signaling\lan;
+
+final class MutableServerDataProvider implements ServerDataProvider{
+
+	public function __construct(
+		private ServerData $data
+	){}
+
+	public function getServerData() : ServerData{ return $this->data; }
+
+	public function setServerData(ServerData $data) : void{
+		$this->data = $data;
+	}
+
+	public function setPongData(string $pong) : void{
+		$data = ServerData::fromPongData($pong);
+		if($data !== null){
+			$this->data = $data;
+		}
+	}
+}

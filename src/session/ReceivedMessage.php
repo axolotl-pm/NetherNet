@@ -14,6 +14,8 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\session;
 
+use pocketmine\nethernet\protocol\Reliability;
+
 final class ReceivedMessage{
 
 	public function __construct(

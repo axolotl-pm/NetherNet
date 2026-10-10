@@ -39,7 +39,7 @@ final class SessionDescription{
 	public const MAX_LINES = 1024;
 
 	/**
-	 * @param int      $mediaStart Index of the first `m=` line, or line count if none.
+	 * @param int $mediaStart Index of the first `m=` line, or line count if none.
 	 * @phpstan-param list<string> $lines
 	 */
 	private function __construct(

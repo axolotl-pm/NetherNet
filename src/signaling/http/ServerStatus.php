@@ -14,7 +14,7 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\http;
 
-use pocketmine\nethernet\discovery\GameType;
+use pocketmine\nethernet\info\GameType;
 use function count;
 use function ctype_digit;
 use function explode;

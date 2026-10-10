@@ -14,6 +14,8 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\negotiation;
 
+use pocketmine\nethernet\protocol\ErrorCode;
+
 /**
  * Handle representing an in-progress WebRTC peer connection negotiation.
  */

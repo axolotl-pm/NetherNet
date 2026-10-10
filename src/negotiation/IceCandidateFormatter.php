@@ -14,8 +14,9 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\negotiation;
 
-use pocketmine\nethernet\InternetAddress;
+use pocketmine\nethernet\protocol\ErrorCode;
 use pocketmine\nethernet\sdp\SessionDescription;
+use pocketmine\nethernet\utils\InternetAddress;
 use function array_map;
 use function array_merge;
 use function array_unique;

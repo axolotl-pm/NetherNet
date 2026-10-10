@@ -16,14 +16,16 @@ namespace pocketmine\nethernet\signaling\http;
 
 use PHPUnit\Framework\TestCase;
 use pocketmine\nethernet\FakeNegotiator;
-use pocketmine\nethernet\InternetAddress;
 use pocketmine\nethernet\RecordingLogger;
 use pocketmine\nethernet\signaling\SignalingException;
+use pocketmine\nethernet\TestSignalingContext;
+use pocketmine\nethernet\utils\InternetAddress;
 use function fclose;
 use function file_put_contents;
 use function fread;
 use function fwrite;
 use function implode;
+use function microtime;
 use function openssl_csr_new;
 use function openssl_csr_sign;
 use function openssl_pkey_export;
@@ -98,10 +100,10 @@ final class HttpSignalingTlsTest extends TestCase{
 	private function start(array $tlsContext, RecordingLogger $logger) : int{
 		for($attempt = 0; $attempt < 25; ++$attempt){
 			$port = random_int(20000, 60000);
-			$signaling = new HttpSignaling(new FakeNegotiator("answer-sdp"), new InternetAddress("127.0.0.1", $port, 4), $tlsContext, $logger);
+			$signaling = new HttpSignaling(new InternetAddress("127.0.0.1", $port, 4), $tlsContext);
 
 			try{
-				$signaling->start();
+				$signaling->start(TestSignalingContext::create(new FakeNegotiator("answer-sdp"), $logger));
 			}catch(SignalingException $e){
 				//a reserved port range is not what this test is about
 				if(!str_contains($e->getMessage(), "Failed to listen")){
@@ -144,7 +146,7 @@ final class HttpSignalingTlsTest extends TestCase{
 
 		$response = "";
 		for($attempt = 0; $attempt < 300 && !str_contains($response, self::CRLF . self::CRLF); ++$attempt){
-			$this->signaling?->tick();
+			$this->signaling?->tick(microtime(true));
 			$chunk = fread($client, 65536);
 			if($chunk !== false){
 				$response .= $chunk;
@@ -161,14 +163,13 @@ final class HttpSignalingTlsTest extends TestCase{
 	 */
 	public function testUnreadableCertificateIsRefusedAtStartup() : void{
 		$signaling = new HttpSignaling(
-			new FakeNegotiator("answer-sdp"),
 			new InternetAddress("127.0.0.1", random_int(20000, 60000), 4),
 			["local_cert" => sys_get_temp_dir() . DIRECTORY_SEPARATOR . "definitely-not-here.pem"]
 		);
 
 		$this->expectException(SignalingException::class);
 		$this->expectExceptionMessageMatches("/cannot be read/");
-		$signaling->start();
+		$signaling->start(TestSignalingContext::create(new FakeNegotiator("answer-sdp")));
 	}
 
 	/**
@@ -184,7 +185,7 @@ final class HttpSignalingTlsTest extends TestCase{
 		$client = $this->connect($port, tls: true);
 
 		for($attempt = 0; $attempt < 300; ++$attempt){
-			$this->signaling?->tick();
+			$this->signaling?->tick(microtime(true));
 			@stream_socket_enable_crypto($client, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
 			usleep(2000);
 
@@ -250,7 +251,7 @@ final class HttpSignalingTlsTest extends TestCase{
 		$client = $this->connect($port, tls: true);
 
 		for($attempt = 0; $attempt < 300; ++$attempt){
-			$this->signaling?->tick();
+			$this->signaling?->tick(microtime(true));
 			$result = @stream_socket_enable_crypto($client, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
 			if($result === true){
 				return;
@@ -273,7 +274,7 @@ final class HttpSignalingTlsTest extends TestCase{
 
 		$established = false;
 		for($attempt = 0; $attempt < 300 && !$established; ++$attempt){
-			$this->signaling?->tick();
+			$this->signaling?->tick(microtime(true));
 			$result = @stream_socket_enable_crypto($client, true, STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT);
 			self::assertNotFalse($result, "the client handshake failed outright: " . implode(" | ", $logger->messages));
 			$established = $result === true;
@@ -285,7 +286,7 @@ final class HttpSignalingTlsTest extends TestCase{
 
 		$response = "";
 		for($attempt = 0; $attempt < 300 && !str_contains($response, self::CRLF . self::CRLF); ++$attempt){
-			$this->signaling?->tick();
+			$this->signaling?->tick(microtime(true));
 			$chunk = fread($client, 65536);
 			if($chunk !== false){
 				$response .= $chunk;

@@ -15,9 +15,10 @@ declare(strict_types=1);
 namespace pocketmine\nethernet;
 
 use pocketmine\nethernet\negotiation\CandidateMode;
-use pocketmine\nethernet\negotiation\ErrorCode;
+use pocketmine\nethernet\negotiation\EstablishedPeer;
 use pocketmine\nethernet\negotiation\Negotiation;
 use pocketmine\nethernet\negotiation\Negotiator;
+use pocketmine\nethernet\protocol\ErrorCode;
 
 /**
  * Stands in for the real negotiator so a signaling transport can be driven
@@ -34,12 +35,18 @@ final class FakeNegotiator implements Negotiator{
 	public ?CandidateMode $lastMode = null;
 	public ?string $lastPeerAddress = null;
 
+	/** @phpstan-var list<EstablishedPeer> */
+	public array $established = [];
+	/** @phpstan-var list<float> */
+	public array $ticks = [];
+	public bool $shutDown = false;
+
 	/**
 	 * @param string[] $localCandidates
 	 * @phpstan-param list<string> $localCandidates
 	 */
 	public function __construct(
-		private readonly ?string $answer,
+		private readonly ?string $answer = null,
 		private readonly array $localCandidates = [],
 		private readonly ?ErrorCode $failWith = null
 	){}
@@ -58,15 +65,18 @@ final class FakeNegotiator implements Negotiator{
 		return $this->negotiation = $negotiation;
 	}
 
-	public function tick() : void{
-		//NOOP
+	public function tick(float $now) : void{
+		$this->ticks[] = $now;
 	}
 
 	public function takeEstablished() : array{
-		return [];
+		$taken = $this->established;
+		$this->established = [];
+
+		return $taken;
 	}
 
 	public function shutdown() : void{
-		//NOOP
+		$this->shutDown = true;
 	}
 }
