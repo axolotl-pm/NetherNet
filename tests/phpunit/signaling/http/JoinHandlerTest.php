@@ -58,7 +58,7 @@ final class JoinHandlerTest extends TestCase{
 
 	public function testOfferIsRoutedByTheNetworkIdInItsPath() : void{
 		self::assertSame("1234", $this->handler()->route(self::offer()));
-		self::assertSame("a b", $this->handler()->route(self::offer("/v1/join/a%20b?x=1")));
+		self::assertSame("567", $this->handler()->route(self::offer("/v1/join/5%367?x=1")));
 	}
 
 	/**

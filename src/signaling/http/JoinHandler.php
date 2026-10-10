@@ -23,8 +23,10 @@ use pocketmine\nethernet\protocol\ErrorCode;
 use pocketmine\nethernet\utils\AddressBlockList;
 use pocketmine\nethernet\utils\InternetAddress;
 use function json_encode;
+use function preg_match;
 use function rawurldecode;
 use function str_starts_with;
+use function strcmp;
 use function strlen;
 use function substr;
 use const JSON_THROW_ON_ERROR;
@@ -40,6 +42,7 @@ final class JoinHandler{
 
 	private const PATH = "/v1/join";
 	private const OFFER_PATH_PREFIX = self::PATH . "/";
+	private const MAX_NETWORK_ID = "18446744073709551615";
 
 	public const CONTENT_TYPE_SDP = "application/sdp";
 	public const CONTENT_TYPE_JSON = "application/json";
@@ -87,6 +90,9 @@ final class JoinHandler{
 		}
 		if(strlen($networkId) > HttpSignaling::MAX_NETWORK_ID_LENGTH){
 			throw new HttpException(HttpStatus::URI_TOO_LONG, "NetworkID is longer than " . HttpSignaling::MAX_NETWORK_ID_LENGTH . " bytes");
+		}
+		if(preg_match('/^\d{1,20}\z/', $networkId) !== 1 || (strlen($networkId) === 20 && strcmp($networkId, self::MAX_NETWORK_ID) > 0)){
+			throw new HttpException(HttpStatus::BAD_REQUEST, "NetworkID must be an unsigned 64-bit integer");
 		}
 
 		return $networkId;
