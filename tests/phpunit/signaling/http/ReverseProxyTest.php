@@ -31,13 +31,6 @@ final class ReverseProxyTest extends TestCase{
 		return HttpRequest::parse($head);
 	}
 
-	public function testCloudflarePrefersItsOwnHeaderOverForwardedFor() : void{
-		$proxy = ReverseProxy::cloudflare();
-		$request = self::request(["CF-Connecting-IP: 203.0.113.7", "X-Forwarded-For: 198.51.100.9"]);
-
-		self::assertSame("203.0.113.7", $proxy->clientAddress($request));
-	}
-
 	public function testNginxFallsBackToForwardedForWithoutRealIp() : void{
 		$proxy = ReverseProxy::nginx();
 

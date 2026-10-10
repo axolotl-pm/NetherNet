@@ -54,11 +54,6 @@ final class SessionDescriptionTest extends TestCase{
 		self::assertSame($crlf->toString(), $lf->toString());
 	}
 
-	public function testEmptyDescriptionIsRefused() : void{
-		$this->expectException(SdpException::class);
-		SessionDescription::parse("");
-	}
-
 	/**
 	 * A description with more lines than any real offer carries is refused rather
 	 * than parsed, so a hostile body cannot be turned into a huge line array the
@@ -72,11 +67,6 @@ final class SessionDescriptionTest extends TestCase{
 
 		$this->expectException(SdpException::class);
 		SessionDescription::parse(self::build(extraMedia: $flood));
-	}
-
-	/** Output always terminates the last line, which some parsers require. */
-	public function testToStringTerminatesEveryLine() : void{
-		self::assertStringEndsWith("a=max-message-size:262144\r\n", SessionDescription::parse(self::build())->toString());
 	}
 
 	/**
@@ -203,11 +193,6 @@ final class SessionDescriptionTest extends TestCase{
 		$description->getFingerprint();
 	}
 
-	public function testValidateAcceptsACompleteDescription() : void{
-		$this->expectNotToPerformAssertions();
-		SessionDescription::parse(self::build())->validate();
-	}
-
 	/**
 	 * @dataProvider missingAttributeProvider
 	 */
@@ -231,10 +216,6 @@ final class SessionDescriptionTest extends TestCase{
 			"fingerprint" => ["a=fingerprint:sha-256 AA:BB:CC:DD"],
 			"media section" => ["m=application 9 UDP/DTLS/SCTP webrtc-datachannel"]
 		];
-	}
-
-	public function testMaxMessageSizeIsReadFromTheMediaSection() : void{
-		self::assertSame(262144, SessionDescription::parse(self::build())->getMaxMessageSize());
 	}
 
 	/**

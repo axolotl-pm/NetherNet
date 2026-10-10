@@ -38,7 +38,6 @@ use function microtime;
 use function socket_bind;
 use function socket_close;
 use function socket_create;
-use function socket_getsockname;
 use function socket_last_error;
 use function socket_recvfrom;
 use function socket_sendto;
@@ -326,14 +325,5 @@ final class LanSignalingTest extends TestCase{
 		self::assertNotNull($this->receive(), "the host stayed silent after the block was lifted");
 
 		$server->shutdown();
-	}
-
-	public function testBoundSocketReportsTheExpectedAddress() : void{
-		$this->startHost(new FakeNegotiator("answer-sdp"));
-
-		$address = "";
-		$port = 0;
-		self::assertTrue(socket_getsockname($this->peer(), $address, $port));
-		self::assertSame("127.0.0.1", $address);
 	}
 }

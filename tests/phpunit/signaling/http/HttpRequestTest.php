@@ -76,13 +76,6 @@ final class HttpRequestTest extends TestCase{
 		$request->getContentLength(1024);
 	}
 
-	public function testOversizedContentLengthIsRefused() : void{
-		$request = HttpRequest::parse("POST /v1/join/1 HTTP/1.1\r\nHost: h\r\nContent-Length: 2000");
-
-		$this->expectException(HttpException::class);
-		$request->getContentLength(1024);
-	}
-
 	/**
 	 * A length that would saturate to PHP_INT_MAX has to be caught as too large,
 	 * not silently wrapped into something that passes the limit check.

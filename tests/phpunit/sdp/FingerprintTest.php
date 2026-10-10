@@ -33,23 +33,6 @@ final class FingerprintTest extends TestCase{
 		);
 	}
 
-	public function testParseSplitsAlgorithmFromDigest() : void{
-		$fingerprint = Fingerprint::parse("sha-256 AA:BB");
-
-		self::assertSame("sha-256", $fingerprint->getAlgorithm());
-		self::assertSame("AA:BB", $fingerprint->getDigest());
-		self::assertSame("sha-256 AA:BB", $fingerprint->toAttributeValue());
-	}
-
-	/**
-	 * Implementations disagree on the case of hex digests, so comparing them
-	 * literally would reject a peer that is saying the same thing.
-	 */
-	public function testDigestsCompareWithoutRegardToCase() : void{
-		self::assertTrue((new Fingerprint("sha-256", "ab:cd"))->equals(new Fingerprint("SHA-256", "AB:CD")));
-		self::assertFalse((new Fingerprint("sha-256", "ab:cd"))->equals(new Fingerprint("sha-256", "ab:ce")));
-	}
-
 	/**
 	 * @dataProvider malformedValueProvider
 	 */

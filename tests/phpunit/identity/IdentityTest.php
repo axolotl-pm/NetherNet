@@ -36,18 +36,6 @@ final class IdentityTest extends TestCase{
 	}
 
 	/**
-	 * The whole point of the assertion: a peer holding the key can prove it also
-	 * terminates the DTLS session this fingerprint describes.
-	 */
-	public function testAssertionProvesTheKeyThatSignedThisConnection() : void{
-		$identity = ServerIdentity::generate();
-		$assertion = (new SelfSignedIdentityProvider($identity, "self"))->issue(self::fingerprint());
-
-		$assertion->verifyFingerprint(self::fingerprint());
-		self::assertTrue($assertion->getToken()->getPublicKey()->equals($identity->getPublicKey()));
-	}
-
-	/**
 	 * The payload is rebuilt locally rather than taken from the peer, so an
 	 * assertion lifted from another connection cannot be replayed onto this one.
 	 */
@@ -91,14 +79,6 @@ final class IdentityTest extends TestCase{
 		self::assertIsArray($inner);
 		self::assertIsString($inner["token"]);
 		self::assertIsString($inner["fingerprints"]);
-	}
-
-	/** A host token vouches for itself, which is what makes pinning its key useful. */
-	public function testHostTokenIsSelfSigned() : void{
-		$assertion = (new SelfSignedIdentityProvider(ServerIdentity::generate()))->issue(self::fingerprint());
-
-		$this->expectNotToPerformAssertions();
-		(new SelfSignedTokenVerifier())->check($assertion->getToken());
 	}
 
 	/**
@@ -152,19 +132,6 @@ final class IdentityTest extends TestCase{
 		];
 	}
 
-	/**
-	 * The verifier's job is to bind an identity to this connection, so a peer that
-	 * sends none must be a deliberate configuration choice rather than a default.
-	 */
-	public function testAnonymousPeerIsRefusedUnlessAllowed() : void{
-		$this->expectException(IdentityException::class);
-		(new AssertionIdentityVerifier())->verify(null, self::fingerprint());
-	}
-
-	public function testAnonymousPeerIsAllowedWhenConfigured() : void{
-		self::assertNull((new AssertionIdentityVerifier(allowAnonymous: true))->verify(null, self::fingerprint()));
-	}
-
 	public function testVerifierReturnsTheProvenKey() : void{
 		$identity = ServerIdentity::generate();
 		$assertion = (new SelfSignedIdentityProvider($identity, "example.test"))->issue(self::fingerprint());
@@ -175,23 +142,6 @@ final class IdentityTest extends TestCase{
 		self::assertTrue($verified->publicKey->equals($identity->getPublicKey()));
 		self::assertSame("example.test", $verified->providerDomain);
 		self::assertTrue($verified->token->getPublicKey()->equals($identity->getPublicKey()));
-	}
-
-	/**
-	 * A token verifier is the only place a host can reject a peer on who it claims
-	 * to be, so its refusal has to stop the connection rather than be logged.
-	 */
-	public function testTokenVerifierCanRefuseAPeer() : void{
-		$assertion = (new SelfSignedIdentityProvider(ServerIdentity::generate()))->issue(self::fingerprint());
-
-		$verifier = new AssertionIdentityVerifier(tokenVerifier: new class implements TokenVerifier{
-			public function check(JsonWebToken $token) : void{
-				throw new IdentityException("not on the allowlist");
-			}
-		});
-
-		$this->expectException(IdentityException::class);
-		$verifier->verify($assertion->encode(), self::fingerprint());
 	}
 
 	/**

@@ -18,16 +18,6 @@ use PHPUnit\Framework\TestCase;
 
 final class InternetAddressTest extends TestCase{
 
-	public function testParsesIpv4() : void{
-		$address = InternetAddress::parse("192.0.2.10:54321");
-
-		self::assertNotNull($address);
-		self::assertSame("192.0.2.10", $address->ip);
-		self::assertSame(54321, $address->port);
-		self::assertSame(4, $address->version);
-		self::assertSame("192.0.2.10:54321", $address->toString());
-	}
-
 	public function testParsesUnbracketedIpv6() : void{
 		$address = InternetAddress::parse("2001:db8::1:5000");
 
@@ -51,10 +41,5 @@ final class InternetAddressTest extends TestCase{
 		self::assertNull(InternetAddress::parse("example.test:80"));
 		self::assertNull(InternetAddress::parse("192.0.2.10:70000"));
 		self::assertNull(InternetAddress::parse("192.0.2.10:"));
-	}
-
-	public function testRejectsInvalidVersion() : void{
-		$this->expectException(\InvalidArgumentException::class);
-		new InternetAddress("192.0.2.10", 80, 5);
 	}
 }

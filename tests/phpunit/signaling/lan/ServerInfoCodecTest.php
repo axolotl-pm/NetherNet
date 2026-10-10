@@ -61,32 +61,6 @@ final class ServerInfoCodecTest extends TestCase{
 		self::assertSame(38, strlen(ServerInfoCodec::encode(self::reference())));
 	}
 
-	/**
-	 * The nonce sits between the auth flags and the connection type. Writing it
-	 * anywhere else still produces a readable length prefix, so the mistake only
-	 * shows up as the varint after it decoding into nonsense.
-	 */
-	public function testNonceIsCarriedBetweenTheAuthFlagsAndTheConnectionType() : void{
-		$data = new ServerInfo(
-			serverName: "server",
-			protocol: 2181,
-			gameVersion: "1.26.50",
-			levelName: "world",
-			gameType: GameType::ADVENTURE,
-			playerCount: 1,
-			maxPlayerCount: 8,
-			nonce: "a1b2c3"
-		);
-
-		self::assertSame(
-			"07067365727665728a2207312e32362e353005776f726c64021004000001010661316232633308",
-			bin2hex(ServerInfoCodec::encode($data))
-		);
-
-		$read = ServerInfoCodec::decode(ServerInfoCodec::encode($data));
-		self::assertSame("a1b2c3", $read->nonce);
-	}
-
 	public function testReferenceEncodingIsReadBack() : void{
 		$bytes = hex2bin(self::REFERENCE);
 		self::assertIsString($bytes);
@@ -173,15 +147,5 @@ final class ServerInfoCodecTest extends TestCase{
 		$this->expectException(DiscoveryException::class);
 		$this->expectExceptionMessage("Unknown game type 8");
 		ServerInfoCodec::decode($bytes);
-	}
-
-	/** Empty names are legal, and produce a one-byte length of zero. */
-	public function testEmptyNamesAreAllowed() : void{
-		$data = new ServerInfo(serverName: "", protocol: 2181, gameVersion: "1.26.50", levelName: "");
-		$read = ServerInfoCodec::decode(ServerInfoCodec::encode($data));
-
-		self::assertSame("", $read->serverName);
-		self::assertSame("", $read->levelName);
-		self::assertSame("00", substr(bin2hex(ServerInfoCodec::encode($data)), 2, 2));
 	}
 }

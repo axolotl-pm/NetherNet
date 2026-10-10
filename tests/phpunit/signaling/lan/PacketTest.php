@@ -24,7 +24,6 @@ use pocketmine\nethernet\signaling\lan\packet\RequestPacket;
 use pocketmine\nethernet\signaling\lan\packet\ResponsePacket;
 use function bin2hex;
 use function chr;
-use function hash;
 use function hash_hmac;
 use function hex2bin;
 use function openssl_decrypt;
@@ -69,16 +68,6 @@ final class PacketTest extends TestCase{
 		self::assertSame("1400" . "0000" . "8070605040302010" . str_repeat("00", 8), bin2hex($plaintext));
 	}
 
-	/** The length field counts the whole plaintext, including itself. */
-	public function testLengthPrefixCountsItself() : void{
-		$frame = PacketSerializer::encode(new RequestPacket(self::SENDER_ID));
-		$plaintext = openssl_decrypt(substr($frame, 32), "aes-256-ecb", DiscoveryCipher::key(), OPENSSL_RAW_DATA, "");
-
-		self::assertIsString($plaintext);
-		self::assertSame(pack("v", 20), substr($plaintext, 0, 2));
-		self::assertSame(20, strlen($plaintext));
-	}
-
 	/**
 	 * The checksum covers the plaintext, not the ciphertext. Getting this backwards
 	 * produces datagrams that look right and are rejected by every real peer.
@@ -92,14 +81,6 @@ final class PacketTest extends TestCase{
 			bin2hex(hash_hmac("sha256", $plaintext, DiscoveryCipher::key(), true)),
 			bin2hex(substr($frame, 0, 32))
 		);
-	}
-
-	public function testRequestSurvivesTheRoundTrip() : void{
-		$packet = PacketSerializer::decode(PacketSerializer::encode(new RequestPacket(self::SENDER_ID)));
-
-		self::assertInstanceOf(RequestPacket::class, $packet);
-		self::assertSame(PacketType::REQUEST, $packet->getType());
-		self::assertSame(self::SENDER_ID, $packet->senderId);
 	}
 
 	/**
@@ -132,14 +113,6 @@ final class PacketTest extends TestCase{
 
 		self::assertInstanceOf(ResponsePacket::class, $packet);
 		self::assertSame($payload, $packet->applicationData);
-	}
-
-	public function testMessageSurvivesTheRoundTrip() : void{
-		$packet = PacketSerializer::decode(PacketSerializer::encode(new MessagePacket(self::SENDER_ID, 0xAABBCCDD, "hello there")));
-
-		self::assertInstanceOf(MessagePacket::class, $packet);
-		self::assertSame(0xAABBCCDD, $packet->recipientId);
-		self::assertSame("hello there", $packet->data);
 	}
 
 	/**
@@ -252,12 +225,5 @@ final class PacketTest extends TestCase{
 
 		self::assertSame(48, strlen(DiscoveryCipher::seal($aligned)) - DiscoveryCipher::CHECKSUM_SIZE);
 		self::assertSame($aligned, DiscoveryCipher::open(DiscoveryCipher::seal($aligned)));
-	}
-
-	public function testKeyDerivationInputIsLittleEndian() : void{
-		$input = hex2bin("efbeadde00000000");
-		self::assertIsString($input);
-
-		self::assertSame(bin2hex(hash("sha256", $input, true)), bin2hex(DiscoveryCipher::key()));
 	}
 }

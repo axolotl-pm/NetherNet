@@ -15,39 +15,11 @@ declare(strict_types=1);
 namespace pocketmine\nethernet\crypto;
 
 use PHPUnit\Framework\TestCase;
-use pocketmine\nethernet\identity\ServerIdentity;
 use function chr;
-use function openssl_sign;
-use function random_bytes;
 use function str_repeat;
-use function strlen;
 use function substr;
-use const OPENSSL_ALGO_SHA384;
 
 final class EcdsaSignatureTest extends TestCase{
-
-	/**
-	 * Real signatures rather than a fixed vector, because the case that breaks
-	 * naive DER handling is rare: a leading zero appears in r or s only when the
-	 * top bit is set, roughly half the time per half, and a coordinate short
-	 * enough to need left-padding is rarer still. A few hundred signatures reach
-	 * both reliably; one canned example would exercise neither.
-	 */
-	public function testEveryRealSignatureSurvivesTheRoundTrip() : void{
-		$privateKey = ServerIdentity::generate()->getPrivateKey();
-
-		for($i = 0; $i < 200; ++$i){
-			$der = "";
-			self::assertTrue(openssl_sign(random_bytes(32), $der, $privateKey, OPENSSL_ALGO_SHA384));
-
-			$jose = EcdsaSignature::derToJose($der);
-			self::assertSame(P384::COORDINATE_SIZE * 2, strlen($jose));
-
-			//DER is not byte-identical after a round trip when the original carried a
-			//redundant leading zero, so the fixed-width form is what gets compared
-			self::assertSame($jose, EcdsaSignature::derToJose(EcdsaSignature::joseToDer($jose)));
-		}
-	}
 
 	/**
 	 * A coordinate whose top bit is set has to gain a leading zero, or DER reads

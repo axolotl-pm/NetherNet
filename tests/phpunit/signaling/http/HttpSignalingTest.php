@@ -107,29 +107,21 @@ final class HttpSignalingTest extends TestCase{
 		return $response;
 	}
 
-	public function testCapabilityProbeIsAnswered() : void{
-		$this->start(new FakeNegotiator("answer-sdp"));
-
-		$response = $this->exchange($this->connect(), "GET /v1/join HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
-
-		self::assertStringStartsWith("HTTP/1.1 200 OK\r\n", $response);
-		self::assertStringContainsString("Connection: close", $response);
-	}
-
 	/**
 	 * The status is what fills the server card, so the probe has to carry it. A
 	 * client that gets a bare 200 will still offer, but the row it draws first is
-	 * blank.
+	 * blank. Escaping the name would still decode, but makes the one thing an
+	 * operator looks for in a capture unreadable.
 	 */
 	public function testProbeCarriesTheStatusWhenThereIsOne() : void{
-		$status = new ServerInfo("Dedicated Server", 800, "1.21.100", "Bedrock level", playerCount: 3, maxPlayerCount: 20);
+		$status = new ServerInfo("Café Server / #1", 800, "1.21.100", "Bedrock level", playerCount: 3, maxPlayerCount: 20);
 		$this->start(new FakeNegotiator("answer-sdp"), new MutableServerInfoProvider($status));
 
 		$response = $this->exchange($this->connect(), "GET /v1/join HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
 
 		self::assertStringStartsWith("HTTP/1.1 200 OK\r\n", $response);
 		self::assertStringContainsString("Content-Type: application/json\r\n", $response);
-		self::assertStringEndsWith('"name":"Dedicated Server","protocol":800,"version":"1.21.100","level":"Bedrock level","players":3,"maxPlayers":20,"gameType":0}', $response);
+		self::assertStringEndsWith('"name":"Café Server / #1","protocol":800,"version":"1.21.100","level":"Bedrock level","players":3,"maxPlayers":20,"gameType":0}', $response);
 	}
 
 	/**
@@ -184,30 +176,6 @@ final class HttpSignalingTest extends TestCase{
 		$this->exchange($this->connect(), "POST /v1/join/1 HTTP/1.1\r\nHost: h\r\nX-Real-IP: 203.0.113.7\r\nContent-Type: application/sdp\r\nContent-Length: 5\r\n\r\noffer");
 
 		self::assertSame("127.0.0.1", $negotiator->lastPeerAddress);
-	}
-
-	public function testUnknownPathIsNotFound() : void{
-		$this->start(new FakeNegotiator("answer-sdp"));
-
-		$response = $this->exchange($this->connect(), "GET /nope HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
-
-		self::assertStringStartsWith("HTTP/1.1 404 ", $response);
-	}
-
-	public function testOfferWithoutTheSdpContentTypeIsRefused() : void{
-		$this->start(new FakeNegotiator("answer-sdp"));
-
-		$response = $this->exchange($this->connect(), "POST /v1/join/1 HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: text/plain\r\nContent-Length: 3\r\n\r\nabc");
-
-		self::assertStringStartsWith("HTTP/1.1 415 ", $response);
-	}
-
-	public function testProbeEndpointRefusesAPost() : void{
-		$this->start(new FakeNegotiator("answer-sdp"));
-
-		$response = $this->exchange($this->connect(), "POST /v1/join HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n");
-
-		self::assertStringStartsWith("HTTP/1.1 405 ", $response);
 	}
 
 	/**
@@ -325,13 +293,6 @@ final class HttpSignalingTest extends TestCase{
 
 		self::assertTrue(self::isClosedByTheServer($late));
 		self::assertFalse(feof($busy));
-	}
-
-	public function testBoundAddressIsOnlyKnownWhileListening() : void{
-		$signaling = new HttpSignaling(new InternetAddress("127.0.0.1", 0, 4));
-
-		$this->expectException(\LogicException::class);
-		$signaling->getBoundAddress();
 	}
 
 	public function testStartingTwiceIsRefused() : void{

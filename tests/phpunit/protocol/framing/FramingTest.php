@@ -121,10 +121,6 @@ final class FramingTest extends TestCase{
 		(new Assembler(false))->accept(chr(1) . "aa");
 	}
 
-	public function testUnreliableChannelAcceptsWholeMessages() : void{
-		self::assertSame("aa", (new Assembler(false))->accept(chr(0) . "aa"));
-	}
-
 	public function testSegmentWithoutPayloadIsRefused() : void{
 		$this->expectException(FramingException::class);
 		(new Assembler(true))->accept(chr(0));

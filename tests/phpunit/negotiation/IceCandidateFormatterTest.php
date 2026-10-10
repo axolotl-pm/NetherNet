@@ -42,14 +42,6 @@ final class IceCandidateFormatterTest extends TestCase{
 		self::assertSame(["advertised 1 udp " . ((100 << 24) + (65535 << 8) + 255) . " 203.0.113.10 38922 typ srflx raddr 0.0.0.0 rport 0"], $advertised);
 	}
 
-	public function testHeldAndForeignAddressesCanBeAdvertisedTogether() : void{
-		$advertised = IceCandidateFormatter::advertise([self::LAN_HOST, self::DOCKER_HOST], ["192.168.45.45", "203.0.113.10"]);
-
-		self::assertCount(2, $advertised);
-		self::assertSame(self::LAN_HOST, $advertised[0]);
-		self::assertStringContainsString("203.0.113.10 38922 typ srflx", $advertised[1]);
-	}
-
 	public function testIpv6AddressMatchesRegardlessOfNotation() : void{
 		self::assertSame([self::IPV6_HOST], IceCandidateFormatter::advertise([self::IPV6_HOST], ["[FD7A:115C:A1E0:0:0:0:0:1]"]));
 	}

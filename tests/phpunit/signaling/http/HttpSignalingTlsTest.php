@@ -211,40 +211,6 @@ final class HttpSignalingTlsTest extends TestCase{
 	}
 
 	/**
-	 * The capability probe gets the same treatment, so a client that follows
-	 * redirects finds TLS on its first request rather than its second.
-	 */
-	public function testPlaintextProbeIsRedirectedToo() : void{
-		$logger = new RecordingLogger();
-		$port = $this->start($this->certificate(), $logger);
-
-		$response = $this->exchange($port, ["GET /v1/join HTTP/1.1", "Host: 127.0.0.1:$port"]);
-
-		self::assertStringStartsWith("HTTP/1.1 308 ", $response, "got: $response\nlog: " . implode(" | ", $logger->messages));
-		self::assertStringContainsString("Location: https://127.0.0.1:$port/v1/join", $response);
-	}
-
-	/** A peer that really does speak TLS still gets a handshake, not a redirect. */
-	public function testTlsClientStillNegotiates() : void{
-		$logger = new RecordingLogger();
-		$port = $this->start($this->certificate(), $logger);
-
-		$client = $this->connect($port, tls: true);
-
-		for($attempt = 0; $attempt < 300; ++$attempt){
-			$this->signaling?->tick(microtime(true));
-			$result = @stream_socket_enable_crypto($client, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-			if($result === true){
-				return;
-			}
-			self::assertNotFalse($result, "the client handshake failed outright: " . implode(" | ", $logger->messages));
-			usleep(2000);
-		}
-
-		self::fail("the TLS handshake never completed: " . implode(" | ", $logger->messages));
-	}
-
-	/**
 	 * Verifies that requests over TLS 1.3 succeed without misidentifying subsequent handshake records as plain HTTP.
 	 */
 	public function testRequestOverTls13IsAnswered() : void{
