@@ -82,7 +82,8 @@ final class TransportNegotiator implements Negotiator{
 
 		$candidateCount = $offer->countCandidates();
 		if($candidateCount > $this->maxRemoteCandidates){
-			throw new NegotiationException("Offer carries $candidateCount ICE candidates, over the limit of " . $this->maxRemoteCandidates, ErrorCode::CANDIDATE_ADD);
+			$this->logger->debug("Offer from $networkId carries $candidateCount ICE candidates, using the first " . $this->maxRemoteCandidates);
+			$offer = $offer->withCandidateLimit($this->maxRemoteCandidates);
 		}
 
 		try{

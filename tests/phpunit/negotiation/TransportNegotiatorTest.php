@@ -303,14 +303,12 @@ final class TransportNegotiatorTest extends TestCase{
 		}
 	}
 
-	public function testOfferWithTooManyCandidatesIsRefused() : void{
-		try{
-			$this->negotiator->beginNegotiation(SdpFixture::description(array_fill(0, self::MAX_REMOTE_CANDIDATES + 1, SdpFixture::HOST_CANDIDATE)), "1234");
-			self::fail("an offer over the candidate limit was accepted");
-		}catch(NegotiationException $e){
-			self::assertSame(ErrorCode::CANDIDATE_ADD, $e->getErrorCode());
-			self::assertSame([], $this->factory->created);
-		}
+	public function testOfferWithTooManyCandidatesIsCutDownToTheLimit() : void{
+		$this->negotiator->beginNegotiation(SdpFixture::description(array_fill(0, self::MAX_REMOTE_CANDIDATES + 1, SdpFixture::HOST_CANDIDATE)), "1234");
+
+		$offer = $this->transport()->remoteOffer;
+		self::assertNotNull($offer);
+		self::assertSame(self::MAX_REMOTE_CANDIDATES, SessionDescription::parse($offer)->countCandidates());
 	}
 
 	public function testTransportThatCannotBeCreatedRefusesTheOffer() : void{

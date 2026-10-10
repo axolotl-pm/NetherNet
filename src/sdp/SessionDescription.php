@@ -245,6 +245,22 @@ final class SessionDescription{
 		return new self($merged, self::findMediaStart($merged));
 	}
 
+	/**
+	 * Returns a copy keeping only the first ICE candidates, up to the given number.
+	 */
+	public function withCandidateLimit(int $limit) : self{
+		$lines = [];
+		$kept = 0;
+		foreach($this->lines as $line){
+			if(str_starts_with($line, "a=candidate:") && ++$kept > $limit){
+				continue;
+			}
+			$lines[] = $line;
+		}
+
+		return new self($lines, self::findMediaStart($lines));
+	}
+
 	public function countCandidates() : int{
 		$count = 0;
 		foreach($this->lines as $line){
