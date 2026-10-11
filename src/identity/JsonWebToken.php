@@ -128,12 +128,17 @@ final class JsonWebToken{
 	/**
 	 * @param int $now Current Unix time
 	 *
-	 * @throws IdentityException if the token has expired or is not valid yet
+	 * @throws IdentityException if the token has expired, is not valid yet, or claims to be issued in the future
 	 */
 	public function checkTimestamps(int $now, int $leewaySeconds = self::DEFAULT_LEEWAY_SECONDS) : void{
 		$notBefore = $this->readTimestamp(self::CLAIM_NOT_BEFORE);
 		if($notBefore !== null && $now + $leewaySeconds < $notBefore){
 			throw new IdentityException("Token is not valid yet");
+		}
+
+		$issuedAt = $this->readTimestamp(self::CLAIM_ISSUED_AT);
+		if($issuedAt !== null && $now + $leewaySeconds < $issuedAt){
+			throw new IdentityException("Token was issued in the future");
 		}
 
 		$expiry = $this->readTimestamp(self::CLAIM_EXPIRY);
