@@ -18,6 +18,7 @@ use PHPUnit\Framework\TestCase;
 use pocketmine\nethernet\FakeNegotiator;
 use pocketmine\nethernet\info\MutableServerInfoProvider;
 use pocketmine\nethernet\info\ServerInfo;
+use pocketmine\nethernet\info\ServerInfoCodec;
 use pocketmine\nethernet\info\ServerInfoProvider;
 use pocketmine\nethernet\negotiation\CandidateMode;
 use pocketmine\nethernet\negotiation\Negotiator;

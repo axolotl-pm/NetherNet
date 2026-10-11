@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\lan;
 
+use pocketmine\nethernet\info\ServerInfoCodec;
 use pocketmine\nethernet\info\ServerInfoProvider;
 use pocketmine\nethernet\negotiation\CandidateMode;
 use pocketmine\nethernet\negotiation\NegotiationException;

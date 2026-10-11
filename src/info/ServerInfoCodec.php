@@ -12,20 +12,22 @@
 
 declare(strict_types=1);
 
-namespace pocketmine\nethernet\signaling\lan;
+namespace pocketmine\nethernet\info;
 
 use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\DataDecodeException;
 use pmmp\encoding\VarInt;
-use pocketmine\nethernet\info\GameType;
-use pocketmine\nethernet\info\ServerInfo;
 use pocketmine\nethernet\signaling\lan\packet\DiscoveryException;
+use function json_encode;
 use function strlen;
+use const JSON_THROW_ON_ERROR;
+use const JSON_UNESCAPED_SLASHES;
+use const JSON_UNESCAPED_UNICODE;
 
 /**
- * LAN discovery advertisement payload, version 7.
+ * Binary (LAN advertisement) and JSON (HTTP probe) encodings of a {@link ServerInfo}.
  */
 final class ServerInfoCodec{
 
@@ -52,6 +54,29 @@ final class ServerInfoCodec{
 		VarInt::writeSignedInt($out, ServerInfo::CONNECTION_TYPE_NETHERNET);
 
 		return $out->getData();
+	}
+
+	/**
+	 * @throws \JsonException
+	 */
+	public static function encodeJson(ServerInfo $info) : string{
+		return json_encode([
+			"dataVersion" => ServerInfo::DATA_VERSION,
+			"name" => $info->serverName,
+			"protocol" => $info->protocol,
+			"version" => $info->gameVersion,
+			"level" => $info->levelName,
+			"players" => $info->playerCount,
+			"maxPlayers" => $info->maxPlayerCount,
+			"gameType" => $info->gameType->value,
+			"editor" => $info->editorWorld,
+			"hardcore" => $info->hardcore,
+			"onlineAuth" => $info->acceptsOnlineAuth,
+			"selfSignedAuth" => $info->acceptsSelfSignedAuth,
+			"nonce" => $info->nonce,
+			"transportLayer" => ServerInfo::TRANSPORT_LAYER_NETHERNET,
+			"connection" => ServerInfo::CONNECTION_TYPE_NETHERNET
+		], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 	}
 
 	/**
@@ -84,7 +109,11 @@ final class ServerInfoCodec{
 			$acceptsOnlineAuth = Byte::readUnsigned($in) !== 0;
 			$acceptsSelfSignedAuth = Byte::readUnsigned($in) !== 0;
 			$nonce = self::readString($in);
-			VarInt::readSignedInt($in); //connection type
+
+			$connectionType = VarInt::readSignedInt($in);
+			if($connectionType !== ServerInfo::CONNECTION_TYPE_NETHERNET){
+				throw new DiscoveryException("Expected connection type " . ServerInfo::CONNECTION_TYPE_NETHERNET . ", got $connectionType");
+			}
 
 			if($in->getUnreadLength() !== 0){
 				throw new DiscoveryException("Server advertisement has " . $in->getUnreadLength() . " unread bytes remaining");

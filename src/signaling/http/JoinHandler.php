@@ -14,7 +14,7 @@ declare(strict_types=1);
 
 namespace pocketmine\nethernet\signaling\http;
 
-use pocketmine\nethernet\info\ServerInfo;
+use pocketmine\nethernet\info\ServerInfoCodec;
 use pocketmine\nethernet\info\ServerInfoProvider;
 use pocketmine\nethernet\negotiation\Negotiation;
 use pocketmine\nethernet\negotiation\NegotiationException;
@@ -22,16 +22,12 @@ use pocketmine\nethernet\negotiation\Negotiator;
 use pocketmine\nethernet\protocol\ErrorCode;
 use pocketmine\nethernet\utils\AddressBlockList;
 use pocketmine\nethernet\utils\InternetAddress;
-use function json_encode;
 use function preg_match;
 use function rawurldecode;
 use function str_starts_with;
 use function strcmp;
 use function strlen;
 use function substr;
-use const JSON_THROW_ON_ERROR;
-use const JSON_UNESCAPED_SLASHES;
-use const JSON_UNESCAPED_UNICODE;
 
 /**
  * @internal
@@ -144,23 +140,7 @@ final class JoinHandler{
 		$info = $this->infoProvider?->getServerInfo();
 		if($info !== null){
 			try{
-				return new HttpResponse(HttpStatus::OK, json_encode([
-					"dataVersion" => ServerInfo::DATA_VERSION,
-					"name" => $info->serverName,
-					"protocol" => $info->protocol,
-					"version" => $info->gameVersion,
-					"level" => $info->levelName,
-					"players" => $info->playerCount,
-					"maxPlayers" => $info->maxPlayerCount,
-					"gameType" => $info->gameType->value,
-					"editor" => $info->editorWorld,
-					"hardcore" => $info->hardcore,
-					"onlineAuth" => $info->acceptsOnlineAuth,
-					"selfSignedAuth" => $info->acceptsSelfSignedAuth,
-					"nonce" => $info->nonce,
-					"transportLayer" => ServerInfo::TRANSPORT_LAYER_NETHERNET,
-					"connection" => ServerInfo::CONNECTION_TYPE_NETHERNET
-				], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), self::CONTENT_TYPE_JSON);
+				return new HttpResponse(HttpStatus::OK, ServerInfoCodec::encodeJson($info), self::CONTENT_TYPE_JSON);
 			}catch(\JsonException $e){
 				$this->logger->debug("Could not build the server status: " . $e->getMessage());
 			}
