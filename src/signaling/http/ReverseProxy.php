@@ -42,18 +42,21 @@ final class ReverseProxy{
 
 	/**
 	 * @param string[] $headers  Headers to read the client address from, in order of preference.
-	 * @param string[] $networks Addresses or CIDR blocks of the proxies to trust; any peer is trusted if none are given.
-	 * @phpstan-param list<string> $headers
-	 * @phpstan-param list<string> $networks
+	 * @param string[] $networks Addresses or CIDR blocks of the proxies to trust.
+	 * @phpstan-param non-empty-list<string> $headers
+	 * @phpstan-param non-empty-list<string> $networks
 	 *
 	 * @throws \InvalidArgumentException if a network cannot be parsed
 	 */
 	public function __construct(
 		private readonly array $headers,
-		array $networks = []
+		array $networks
 	){
 		if(count($headers) === 0){
 			throw new \InvalidArgumentException("At least one header must be specified to resolve client address");
+		}
+		if(count($networks) === 0){
+			throw new \InvalidArgumentException("At least one trusted proxy network must be specified");
 		}
 		foreach($networks as $network){
 			$this->networks[] = self::parseNetwork($network);
@@ -61,31 +64,30 @@ final class ReverseProxy{
 	}
 
 	/**
-	 * @phpstan-param list<string> $networks
+	 * @param string[] $networks
+	 * @phpstan-param non-empty-list<string> $networks
 	 */
-	public static function nginx(array $networks = []) : self{
+	public static function nginx(array $networks) : self{
 		return new self([self::HEADER_REAL_IP, self::HEADER_FORWARDED_FOR], $networks);
 	}
 
 	/**
-	 * @phpstan-param list<string> $networks
+	 * @param string[] $networks
+	 * @phpstan-param non-empty-list<string> $networks
 	 */
-	public static function caddy(array $networks = []) : self{
+	public static function caddy(array $networks) : self{
 		return new self([self::HEADER_FORWARDED_FOR], $networks);
 	}
 
 	/**
-	 * @phpstan-param list<string> $networks
+	 * @param string[] $networks
+	 * @phpstan-param non-empty-list<string> $networks
 	 */
-	public static function cloudflare(array $networks = []) : self{
+	public static function cloudflare(array $networks) : self{
 		return new self([self::HEADER_CF_CONNECTING_IP, self::HEADER_FORWARDED_FOR], $networks);
 	}
 
 	public function trusts(string $address) : bool{
-		if(count($this->networks) === 0){
-			return true;
-		}
-
 		$packed = @inet_pton($address);
 		if($packed === false){
 			return false;
@@ -118,7 +120,7 @@ final class ReverseProxy{
 					if($address === null){
 						continue;
 					}
-					if(count($this->networks) === 0 || !$this->trusts($address)){
+					if(!$this->trusts($address)){
 						return $address;
 					}
 				}

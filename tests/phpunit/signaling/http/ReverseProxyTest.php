@@ -32,7 +32,7 @@ final class ReverseProxyTest extends TestCase{
 	}
 
 	public function testNginxFallsBackToForwardedForWithoutRealIp() : void{
-		$proxy = ReverseProxy::nginx();
+		$proxy = ReverseProxy::nginx(["10.0.0.0/8"]);
 
 		self::assertSame("203.0.113.7", $proxy->clientAddress(self::request(["X-Real-IP: 203.0.113.7", "X-Forwarded-For: 198.51.100.9"])));
 		self::assertSame("198.51.100.9", $proxy->clientAddress(self::request(["X-Forwarded-For: 198.51.100.9"])));
@@ -42,7 +42,7 @@ final class ReverseProxyTest extends TestCase{
 	 * Proxies append addresses to X-Forwarded-For from left to right, so the most recent proxy is on the right.
 	 */
 	public function testForwardedForIsReadFromTheRight() : void{
-		$proxy = ReverseProxy::caddy();
+		$proxy = ReverseProxy::caddy(["10.0.0.0/8"]);
 		$request = self::request(["X-Forwarded-For: 1.2.3.4, 203.0.113.7"]);
 
 		self::assertSame("203.0.113.7", $proxy->clientAddress($request));
@@ -60,7 +60,7 @@ final class ReverseProxyTest extends TestCase{
 	}
 
 	public function testBracketsAndPortsAreStripped() : void{
-		$proxy = ReverseProxy::caddy();
+		$proxy = ReverseProxy::caddy(["10.0.0.0/8"]);
 
 		self::assertSame("2001:db8::7", $proxy->clientAddress(self::request(["X-Forwarded-For: [2001:db8::7]:41000"])));
 		self::assertSame("2001:db8::7", $proxy->clientAddress(self::request(["X-Forwarded-For: [2001:db8::7]"])));
@@ -68,7 +68,7 @@ final class ReverseProxyTest extends TestCase{
 	}
 
 	public function testEntriesThatAreNotAddressesAreIgnored() : void{
-		$proxy = ReverseProxy::nginx();
+		$proxy = ReverseProxy::nginx(["10.0.0.0/8"]);
 
 		self::assertNull($proxy->clientAddress(self::request(["X-Real-IP: unknown"])));
 		self::assertSame("203.0.113.7", $proxy->clientAddress(self::request(["X-Forwarded-For: 203.0.113.7, unknown"])));
@@ -92,13 +92,6 @@ final class ReverseProxyTest extends TestCase{
 
 		self::assertTrue($proxy->trusts("203.0.113.63"));
 		self::assertFalse($proxy->trusts("203.0.113.64"));
-	}
-
-	/**
-	 * When no trusted networks are configured, all peers are trusted by default.
-	 */
-	public function testNoNetworksTrustsEveryone() : void{
-		self::assertTrue(ReverseProxy::cloudflare()->trusts("203.0.113.7"));
 	}
 
 	public function testMalformedNetworkIsRejected() : void{
