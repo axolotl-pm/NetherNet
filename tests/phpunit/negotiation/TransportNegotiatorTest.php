@@ -60,6 +60,8 @@ final class TransportNegotiatorTest extends TestCase{
 			self::GATHERING_TIMEOUT,
 			self::CHANNEL_TIMEOUT,
 			self::MAX_REMOTE_CANDIDATES,
+			TransportNegotiator::DEFAULT_MAX_NEGOTIATIONS,
+			TransportNegotiator::DEFAULT_MAX_NEGOTIATIONS_PER_ADDRESS,
 			new RecordingLogger()
 		);
 	}

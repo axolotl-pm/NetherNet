@@ -24,10 +24,13 @@ use pocketmine\nethernet\transport\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\transport\PeerTransportFactory;
 use pocketmine\nethernet\transport\TransportException;
 use pocketmine\nethernet\utils\InternetAddress;
+use function array_keys;
 
 final class TransportNegotiator implements Negotiator{
 
 	public const DEFAULT_MAX_REMOTE_CANDIDATES = 32;
+	public const DEFAULT_MAX_NEGOTIATIONS = 256;
+	public const DEFAULT_MAX_NEGOTIATIONS_PER_ADDRESS = 16;
 
 	/**
 	 * @var TransportNegotiation[]
@@ -40,6 +43,9 @@ final class TransportNegotiator implements Negotiator{
 	 * @phpstan-var list<EstablishedPeer>
 	 */
 	private array $established = [];
+
+	/** @phpstan-var array<string, true> */
+	private array $floodingAddresses = [];
 
 	private int $nextNegotiationId = 0;
 	private bool $shutDown = false;
@@ -58,6 +64,8 @@ final class TransportNegotiator implements Negotiator{
 		private readonly float $gatheringTimeout,
 		private readonly float $channelTimeout,
 		private readonly int $maxRemoteCandidates,
+		private readonly ?int $maxNegotiations,
+		private readonly ?int $maxNegotiationsPerAddress,
 		private readonly \Logger $logger,
 		?array $advertisedAddresses = null
 	){
@@ -71,6 +79,7 @@ final class TransportNegotiator implements Negotiator{
 		if($peerAddress !== null){
 			$peerAddress = InternetAddress::normalizeIp($peerAddress) ?? throw new \InvalidArgumentException("Peer address \"$peerAddress\" is not an IP address");
 		}
+		$this->checkLimits($peerAddress);
 
 		try{
 			$offer = SessionDescription::parse($offerSdp);
@@ -126,6 +135,34 @@ final class TransportNegotiator implements Negotiator{
 		return $negotiation;
 	}
 
+	/**
+	 * Refuses the offer before anything is spent on it: each negotiation holds a peer connection until it ends.
+	 *
+	 * @throws NegotiationException
+	 */
+	private function checkLimits(?string $peerAddress) : void{
+		$total = 0;
+		$fromAddress = 0;
+		foreach($this->negotiations as $negotiation){
+			if($negotiation->isFinished()){
+				continue;
+			}
+			$total++;
+			if($peerAddress !== null && $negotiation->getClientAddress() === $peerAddress){
+				$fromAddress++;
+			}
+		}
+
+		if($peerAddress !== null && $this->maxNegotiationsPerAddress !== null && $fromAddress >= $this->maxNegotiationsPerAddress){
+			$this->floodingAddresses[$peerAddress] = true;
+
+			throw new NegotiationException("$peerAddress already has $fromAddress negotiations in progress", ErrorCode::INCOMING_CONNECTION_IGNORED);
+		}
+		if($this->maxNegotiations !== null && $total >= $this->maxNegotiations){
+			throw new NegotiationException("Negotiation limit of $this->maxNegotiations reached", ErrorCode::INCOMING_CONNECTION_IGNORED);
+		}
+	}
+
 	private function addSignalingPeerCandidate(TransportNegotiation $negotiation, SessionDescription $offer, string $peerAddress) : void{
 		$candidate = IceCandidateFormatter::signalingPeer($offer, $peerAddress);
 		if($candidate === null){
@@ -167,6 +204,13 @@ final class TransportNegotiator implements Negotiator{
 		return $taken;
 	}
 
+	public function takeFloodingAddresses() : array{
+		$taken = array_keys($this->floodingAddresses);
+		$this->floodingAddresses = [];
+
+		return $taken;
+	}
+
 	public function shutdown() : void{
 		if($this->shutDown){
 			return;
@@ -182,5 +226,6 @@ final class TransportNegotiator implements Negotiator{
 			$peer->transport->close();
 		}
 		$this->established = [];
+		$this->floodingAddresses = [];
 	}
 }

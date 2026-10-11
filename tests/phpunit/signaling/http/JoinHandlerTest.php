@@ -118,6 +118,8 @@ final class JoinHandlerTest extends TestCase{
 
 			public function takeEstablished() : array{ return []; }
 
+			public function takeFloodingAddresses() : array{ return []; }
+
 			public function shutdown() : void{}
 		};
 		$handler = new JoinHandler($negotiator, $this->blockTracker, null, null, new RecordingLogger());

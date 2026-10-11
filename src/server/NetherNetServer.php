@@ -62,6 +62,8 @@ final class NetherNetServer implements ServerInterface{
 				$configuration->gatheringTimeout,
 				$configuration->channelTimeout,
 				$configuration->maxRemoteCandidates,
+				$configuration->maxNegotiations,
+				$configuration->maxNegotiationsPerAddress,
 				$configuration->logger,
 				$configuration->advertisedAddresses
 			),
@@ -119,6 +121,10 @@ final class NetherNetServer implements ServerInterface{
 			}
 
 			$this->negotiator->tick($now);
+			foreach($this->negotiator->takeFloodingAddresses() as $address){
+				$this->logger->notice("Blocking $address: too many connections being negotiated at once");
+				$this->blockAddress($address);
+			}
 			$this->openEstablishedSessions();
 		}
 

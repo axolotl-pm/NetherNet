@@ -37,5 +37,13 @@ interface Negotiator{
 	 */
 	public function takeEstablished() : array;
 
+	/**
+	 * Drains the addresses that went over their share of negotiations since the last call, for the server to block.
+	 *
+	 * @return string[]
+	 * @phpstan-return list<string>
+	 */
+	public function takeFloodingAddresses() : array;
+
 	public function shutdown() : void;
 }

@@ -76,6 +76,10 @@ final class FakeNegotiator implements Negotiator{
 		return $taken;
 	}
 
+	public function takeFloodingAddresses() : array{
+		return [];
+	}
+
 	public function shutdown() : void{
 		$this->shutDown = true;
 	}

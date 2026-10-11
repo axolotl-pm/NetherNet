@@ -32,6 +32,12 @@ final class ServerConfiguration{
 	 * @param float            $gatheringTimeout    Timeout in seconds for ICE candidate gathering.
 	 * @param float            $channelTimeout      Timeout in seconds for data channels to open.
 	 * @param int              $maxRemoteCandidates Maximum ICE candidates a peer may offer or trickle per connection.
+	 * @param int|null         $maxNegotiations     Maximum connections being negotiated at once, across all signaling,
+	 *                                              or null for no limit.
+	 * @param int|null         $maxNegotiationsPerAddress Maximum connections one address may be negotiating at once, or
+	 *                                              null for no limit. An address that goes over is blocked, so this has
+	 *                                              to cover every client behind a shared address, such as a proxy that
+	 *                                              does not forward theirs.
 	 * @param string[]|null    $advertisedAddresses Public IP addresses advertised to connecting clients in bundled answers,
 	 *                                              or null to advertise all gathered candidates. Unbound addresses are announced
 	 *                                              as server-reflexive candidates for 1:1 NAT port forwarding.
@@ -46,10 +52,21 @@ final class ServerConfiguration{
 		public readonly float $gatheringTimeout = self::DEFAULT_GATHERING_TIMEOUT,
 		public readonly float $channelTimeout = self::DEFAULT_CHANNEL_TIMEOUT,
 		public readonly int $maxRemoteCandidates = TransportNegotiator::DEFAULT_MAX_REMOTE_CANDIDATES,
+		public readonly ?int $maxNegotiations = TransportNegotiator::DEFAULT_MAX_NEGOTIATIONS,
+		public readonly ?int $maxNegotiationsPerAddress = TransportNegotiator::DEFAULT_MAX_NEGOTIATIONS_PER_ADDRESS,
 		public readonly ?array $advertisedAddresses = null
 	){
 		if($maxRemoteCandidates < 1){
 			throw new \InvalidArgumentException("Maximum remote candidates must be positive, got $maxRemoteCandidates");
+		}
+		if($maxNegotiations !== null && $maxNegotiations < 1){
+			throw new \InvalidArgumentException("Maximum negotiations must be positive or null, got $maxNegotiations");
+		}
+		if($maxNegotiationsPerAddress !== null && $maxNegotiationsPerAddress < 1){
+			throw new \InvalidArgumentException("Maximum negotiations per address must be positive or null, got $maxNegotiationsPerAddress");
+		}
+		if($maxNegotiations !== null && $maxNegotiationsPerAddress !== null && $maxNegotiationsPerAddress > $maxNegotiations){
+			throw new \InvalidArgumentException("Maximum negotiations per address ($maxNegotiationsPerAddress) cannot be greater than the maximum negotiations ($maxNegotiations)");
 		}
 		if($gatheringTimeout <= 0.0 || $channelTimeout <= 0.0){
 			throw new \InvalidArgumentException("Timeouts must be positive");

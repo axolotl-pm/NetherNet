@@ -58,6 +58,8 @@ final class TransportNegotiation implements Negotiation{
 
 	public function getNetworkId() : string{ return $this->networkId; }
 
+	public function getClientAddress() : ?string{ return $this->clientAddress; }
+
 	public function getAnswer() : ?string{ return $this->answer?->sdp; }
 
 	public function isFinished() : bool{ return $this->state->isFinished(); }
