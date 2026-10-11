@@ -48,6 +48,8 @@ final class LanSignaling implements Signaling{
 	public const MAX_DATAGRAMS_PER_TICK = 256;
 
 	public const DEFAULT_MAX_CONNECTIONS = 64;
+	/** Answered per address; null in the constructor lifts the limit. */
+	public const DEFAULT_MAX_DISCOVERY_REQUESTS_PER_SECOND = 64;
 
 	private const PING_DATA = "Ping";
 
@@ -60,6 +62,10 @@ final class LanSignaling implements Signaling{
 	 * @phpstan-var array<string, LanConnection>
 	 */
 	private array $connections = [];
+
+	/** @phpstan-var array<string, int> keyed by address, for the current second */
+	private array $discoveryRequests = [];
+	private float $discoveryRequestsExpiry = 0.0;
 
 	private SignalingState $state = SignalingState::CREATED;
 
@@ -76,13 +82,17 @@ final class LanSignaling implements Signaling{
 		private readonly ServerInfoProvider $infoProvider,
 		private readonly int $networkId,
 		private readonly InternetAddress $bindAddress = new InternetAddress("0.0.0.0", self::DEFAULT_PORT, 4),
-		private readonly int $maxConnections = self::DEFAULT_MAX_CONNECTIONS
+		private readonly int $maxConnections = self::DEFAULT_MAX_CONNECTIONS,
+		private readonly ?int $maxDiscoveryRequestsPerSecond = self::DEFAULT_MAX_DISCOVERY_REQUESTS_PER_SECOND
 	){
 		if($networkId === 0){
 			throw new \InvalidArgumentException("Network id must not be zero");
 		}
 		if($maxConnections < 1){
 			throw new \InvalidArgumentException("Maximum connections must be positive, got $maxConnections");
+		}
+		if($maxDiscoveryRequestsPerSecond !== null && $maxDiscoveryRequestsPerSecond < 1){
+			throw new \InvalidArgumentException("Maximum discovery requests per second must be positive or null, got $maxDiscoveryRequestsPerSecond");
 		}
 	}
 
@@ -118,6 +128,11 @@ final class LanSignaling implements Signaling{
 		$socket = $this->socket;
 		if($this->state !== SignalingState::STARTED || $socket === null){
 			return;
+		}
+
+		if($now >= $this->discoveryRequestsExpiry){
+			$this->discoveryRequests = [];
+			$this->discoveryRequestsExpiry = $now + 1.0;
 		}
 
 		$this->receiveAll($socket);
@@ -177,6 +192,11 @@ final class LanSignaling implements Signaling{
 		}
 
 		if($packet instanceof RequestPacket){
+			$requests = $this->discoveryRequests[$address->ip] = ($this->discoveryRequests[$address->ip] ?? 0) + 1;
+			if($this->maxDiscoveryRequestsPerSecond !== null && $requests > $this->maxDiscoveryRequestsPerSecond){
+				return;
+			}
+
 			$info = $this->infoProvider->getServerInfo();
 			if($info !== null){
 				$this->send(new ResponsePacket($this->networkId, ServerInfoCodec::encode($info)), $address);
