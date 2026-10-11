@@ -19,6 +19,7 @@ use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\DataDecodeException;
 use pmmp\encoding\LE;
 use function bin2hex;
+use function ctype_xdigit;
 use function hex2bin;
 use function strlen;
 
@@ -45,7 +46,9 @@ final class ResponsePacket extends Packet{
 			throw new DiscoveryException("Invalid data length $length (max " . self::MAX_ENCODED_LENGTH . ")");
 		}
 
-		$decoded = hex2bin($in->readByteArray($length));
+		$hex = $in->readByteArray($length);
+		/* hex2bin() raises a warning for input it cannot decode, so that is ruled out before it is asked. */
+		$decoded = $length % 2 === 0 && ($hex === "" || ctype_xdigit($hex)) ? hex2bin($hex) : false;
 		if($decoded === false){
 			throw new DiscoveryException("Invalid hex data");
 		}
