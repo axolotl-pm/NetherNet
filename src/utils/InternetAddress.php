@@ -27,11 +27,13 @@ use const FILTER_VALIDATE_IP;
 
 final class InternetAddress{
 
+	public readonly string $ip;
+
 	/**
 	 * @throws \InvalidArgumentException
 	 */
 	public function __construct(
-		public readonly string $ip,
+		string $ip,
 		public readonly int $port,
 		public readonly int $version
 	){
@@ -41,6 +43,7 @@ final class InternetAddress{
 		if($version !== 4 && $version !== 6){
 			throw new \InvalidArgumentException("IP version must be 4 or 6, got $version");
 		}
+		$this->ip = self::normalizeIp($ip) ?? $ip;
 	}
 
 	/**
@@ -80,9 +83,7 @@ final class InternetAddress{
 	}
 
 	public function equals(self $other) : bool{
-		return $this->port === $other->port &&
-			$this->version === $other->version &&
-			($this->ip === $other->ip || (self::normalizeIp($this->ip) ?? $this->ip) === (self::normalizeIp($other->ip) ?? $other->ip));
+		return $this->ip === $other->ip && $this->port === $other->port && $this->version === $other->version;
 	}
 
 	public function toString() : string{
