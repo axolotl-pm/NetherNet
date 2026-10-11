@@ -28,19 +28,17 @@ final class ServerConfiguration{
 	public const DEFAULT_CHANNEL_TIMEOUT = 5.0;
 
 	/**
-	 * @param IdentityProvider $identityProvider    Issues server identity assertions (`a=identity`) for SDP answers.
-	 * @param float            $gatheringTimeout    Timeout in seconds for ICE candidate gathering.
-	 * @param float            $channelTimeout      Timeout in seconds for data channels to open.
-	 * @param int              $maxRemoteCandidates Maximum ICE candidates a peer may offer or trickle per connection.
-	 * @param int|null         $maxNegotiations     Maximum connections being negotiated at once, across all signaling,
-	 *                                              or null for no limit.
+	 * @param IdentityProvider $identityProvider          Issues server identity assertions (`a=identity`) for SDP answers.
+	 * @param float            $gatheringTimeout          Timeout in seconds for ICE candidate gathering.
+	 * @param float            $channelTimeout            Timeout in seconds for data channels to open.
+	 * @param int              $maxRemoteCandidates       Maximum ICE candidates a peer may offer or trickle per connection.
+	 * @param int|null         $maxNegotiations           Maximum connections being negotiated at once, across all signaling,
+	 *                                                    or null for no limit.
 	 * @param int|null         $maxNegotiationsPerAddress Maximum connections one address may be negotiating at once, or
-	 *                                              null for no limit. An address that goes over is blocked, so this has
-	 *                                              to cover every client behind a shared address, such as a proxy that
-	 *                                              does not forward theirs.
-	 * @param string[]|null    $advertisedAddresses Public IP addresses advertised to connecting clients in bundled answers,
-	 *                                              or null to advertise all gathered candidates. Unbound addresses are announced
-	 *                                              as server-reflexive candidates for 1:1 NAT port forwarding.
+	 *                                                    null for no limit. An address that goes over is blocked.
+	 * @param string[]|null    $advertisedAddresses       Public IP addresses advertised to connecting clients in bundled answers,
+	 *                                                    or null to advertise all gathered candidates. Unbound addresses are announced
+	 *                                                    as server-reflexive candidates for 1:1 NAT port forwarding.
 	 * @phpstan-param list<string>|null $advertisedAddresses
 	 */
 	public function __construct(
