@@ -16,9 +16,16 @@ namespace pocketmine\nethernet\negotiation;
 
 use function count;
 use function explode;
+use function filter_var;
 use function implode;
+use function preg_match;
+use function rtrim;
 use function str_contains;
+use function str_starts_with;
+use function strlen;
 use function strtolower;
+use function substr;
+use const FILTER_VALIDATE_IP;
 
 /**
  * @internal
@@ -61,6 +68,24 @@ final class IceCandidate{
 		}
 
 		return new self($parts[0], $parts[2], $parts[3], $parts[4], $parts[5], $parts[7], $related["raddr"] ?? null, $related["rport"] ?? null);
+	}
+
+	/**
+	 * Whether the candidate names an IP address, in a form the peer connection cannot read as a hostname to look up.
+	 */
+	public static function isAcceptableFromPeer(string $value) : bool{
+		foreach(["a=", "candidate:"] as $prefix){
+			if(str_starts_with($value, $prefix)){
+				$value = substr($value, strlen($prefix));
+			}
+		}
+
+		// Matched the way the peer connection reads the fields, so that both agree on which one is the address.
+		if(preg_match('/^\S+ \d+ \S+ \d+ (\S+) \d{1,5} typ \S+(?: \S+)*$/D', rtrim($value), $matches) !== 1){
+			return false;
+		}
+
+		return filter_var($matches[1], FILTER_VALIDATE_IP) !== false;
 	}
 
 	/**

@@ -24,7 +24,11 @@ use pocketmine\nethernet\transport\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\transport\PeerTransportFactory;
 use pocketmine\nethernet\transport\TransportException;
 use pocketmine\nethernet\utils\InternetAddress;
+use function array_filter;
 use function array_keys;
+use function array_merge;
+use function array_values;
+use function count;
 
 final class TransportNegotiator implements Negotiator{
 
@@ -87,6 +91,13 @@ final class TransportNegotiator implements Negotiator{
 			$fingerprint = $offer->getFingerprint();
 		}catch(SdpException $e){
 			throw new NegotiationException("Offer is invalid: " . $e->getMessage(), ErrorCode::FAILED_TO_SET_REMOTE_DESCRIPTION, $e);
+		}
+
+		$candidates = array_merge($offer->getSessionAttributeValues("candidate"), $offer->getMediaAttributeValues("candidate"));
+		$usable = array_values(array_filter($candidates, IceCandidate::isAcceptableFromPeer(...)));
+		if(count($usable) !== count($candidates)){
+			$this->logger->debug("Offer from $networkId carries " . (count($candidates) - count($usable)) . " ICE candidates that are malformed or do not name an IP address, skipping them");
+			$offer = $offer->withCandidates($usable);
 		}
 
 		$candidateCount = $offer->countCandidates();

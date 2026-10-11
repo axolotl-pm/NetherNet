@@ -83,6 +83,10 @@ final class TransportNegotiation implements Negotiation{
 		}
 		$this->remoteCandidateCount++;
 
+		if(!IceCandidate::isAcceptableFromPeer($candidate)){
+			throw new NegotiationException("Peer sent a candidate that is malformed or does not name an IP address", ErrorCode::CANDIDATE_ADD);
+		}
+
 		try{
 			$this->transport->addRemoteCandidate($candidate);
 		}catch(TransportException $e){
