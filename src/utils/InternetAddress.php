@@ -79,6 +79,12 @@ final class InternetAddress{
 		return new self($ip, (int) $port, filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false ? 6 : 4);
 	}
 
+	public function equals(self $other) : bool{
+		return $this->port === $other->port &&
+			$this->version === $other->version &&
+			($this->ip === $other->ip || (self::normalizeIp($this->ip) ?? $this->ip) === (self::normalizeIp($other->ip) ?? $other->ip));
+	}
+
 	public function toString() : string{
 		return ($this->version === 6 ? "[$this->ip]" : $this->ip) . ":" . $this->port;
 	}
