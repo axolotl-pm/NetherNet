@@ -2,6 +2,10 @@ name: CI
 
 on: [push, pull_request, workflow_dispatch]
 
+env:
+  LIBDATACHANNEL_VERSION: v0.24.5
+  EXT_WEBRTC_VERSION: 0.3.1
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,10 +16,10 @@ jobs:
         php: ['8.1', '8.2', '8.3', '8.4', '8.5']
     name: Tests (PHP ${{ matrix.php }})
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@2.35.5
+        uses: shivammathur/setup-php@2.40.0
         with:
           php-version: ${{ matrix.php }}
           ini-values: xdebug.max_nesting_level=3000
@@ -24,38 +28,68 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Load Composer package cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: "~/.cache/composer"
           key: "php-${{ matrix.php }}-composer-${{ hashFiles('**/composer.json') }}"
           restore-keys: "php-${{ matrix.php }}-composer-"
 
-      # ext-webrtc is a source-built extension with a libdatachannel dependency, and
-      # nothing under analysis or test needs it at runtime: PHPStan reads the stubs in
-      # stubs/ and the tests drive the transport through fakes. Installing it here would
-      # cost a C++ build for no coverage.
+      - name: Get Ubuntu version
+        id: ubuntu
+        run: echo "version=$(lsb_release -rs)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache libdatachannel
+        id: libdatachannel-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/libdatachannel-install
+          key: libdatachannel-${{ env.LIBDATACHANNEL_VERSION }}-ubuntu-${{ steps.ubuntu.outputs.version }}
+
+      - name: Build libdatachannel
+        if: steps.libdatachannel-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y cmake libssl-dev
+          git clone --depth=1 --recursive -b "$LIBDATACHANNEL_VERSION" https://github.com/paullouisageneau/libdatachannel.git
+          cmake -S libdatachannel -B libdatachannel/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/libdatachannel-install" \
+            -DNO_EXAMPLES=ON -DNO_TESTS=ON -DNO_MEDIA=ON
+          cmake --build libdatachannel/build --config Release --parallel
+          cmake --install libdatachannel/build
+
+      - name: Build and enable ext-webrtc
+        run: |
+          echo "$GITHUB_WORKSPACE/libdatachannel-install/lib" | sudo tee /etc/ld.so.conf.d/libdatachannel.conf
+          sudo ldconfig
+          git clone --depth=1 -b "$EXT_WEBRTC_VERSION" https://github.com/axolotl-pm/ext-webrtc.git
+          cd ext-webrtc
+          phpize
+          ./configure --enable-webrtc --with-libdatachannel="$GITHUB_WORKSPACE/libdatachannel-install"
+          make -j"$(nproc)"
+          sudo make install
+          echo "extension=webrtc" | sudo tee "$(php -r 'echo PHP_CONFIG_FILE_SCAN_DIR;')/webrtc.ini"
+
       - name: Validate composer.json
         run: composer validate --strict
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --ignore-platform-req=ext-webrtc
+        run: composer install --prefer-dist --no-interaction
 
       - name: Run PHPStan
         run: ./vendor/bin/phpstan analyse --no-progress
 
-      # phpunit.xml.dist already turns warnings and risky tests into failures
       - name: Run PHPUnit tests
-        run: ./vendor/bin/phpunit
+        run: composer phpunit
 
   codestyle:
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[ci skip]')"
     name: Code Style checks
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@2.35.5
+        uses: shivammathur/setup-php@2.40.0
         with:
           php-version: 8.1
           ini-values: xdebug.max_nesting_level=3000

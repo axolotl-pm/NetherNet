@@ -16,7 +16,6 @@
 		"pocketmine/log": "^0.4.0"
 	},
 	"require-dev": {
-		"friendsofphp/php-cs-fixer": "^3.75",
 		"phpstan/phpstan": "2.1.46",
 		"phpstan/phpstan-phpunit": "^2.0.0",
 		"phpstan/phpstan-strict-rules": "^2.0.0",
@@ -39,9 +38,7 @@
 		"sort-packages": true
 	},
 	"scripts": {
-		"cs-check": "php-cs-fixer fix --dry-run --diff --ansi",
-		"cs-fix": "php-cs-fixer fix --ansi",
 		"phpstan": "phpstan analyse --no-progress",
-		"phpunit": "phpunit"
+		"phpunit": "phpunit --bootstrap vendor/autoload.php --cache-directory .phpunit.cache --colors=auto --order-by=random --disallow-test-output --fail-on-warning --fail-on-risky --fail-on-deprecation --fail-on-notice --fail-on-phpunit-deprecation tests/phpunit"
 	}
 }
