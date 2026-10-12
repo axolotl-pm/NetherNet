@@ -87,7 +87,7 @@ $infoProvider = new MutableServerInfoProvider(new ServerInfo(
 	maxPlayerCount: 20
 ));
 $server->addSignaling(new HttpSignaling(new InternetAddress('0.0.0.0', 19132, 4), infoProvider: $infoProvider));
-$server->addSignaling(new LanSignaling($infoProvider, networkId: 12345678));
+$server->addSignaling(new LanSignaling($infoProvider, networkId: 12345678), optional: true);
 
 // 4. Start the server and run the tick loop
 $server->start();

@@ -107,6 +107,10 @@ final class LanSignaling implements Signaling{
 		return $this->socket?->getBindAddress() ?? throw new \LogicException("LAN signaling is not listening");
 	}
 
+	public function describe() : string{
+		return "LAN signaling on " . ($this->socket?->getBindAddress() ?? $this->bindAddress);
+	}
+
 	public function start(SignalingContext $context) : void{
 		$this->state->checkCanStart();
 

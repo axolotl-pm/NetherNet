@@ -29,6 +29,10 @@ final class FakeSignaling implements Signaling{
 		private readonly bool $failToStart = false
 	){}
 
+	public function describe() : string{
+		return "fake signaling";
+	}
+
 	public function start(SignalingContext $context) : void{
 		if($this->failToStart){
 			throw new SignalingException("start refused by the test");

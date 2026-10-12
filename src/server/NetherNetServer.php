@@ -22,6 +22,7 @@ use pocketmine\nethernet\session\SessionException;
 use pocketmine\nethernet\signaling\Signaling;
 use pocketmine\nethernet\signaling\SignalingContext;
 use pocketmine\nethernet\signaling\SignalingException;
+use pocketmine\nethernet\signaling\SignalingRegistry;
 use pocketmine\nethernet\transport\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\utils\AddressBlockTracker;
 use pocketmine\nethernet\utils\InternetAddress;
@@ -29,11 +30,11 @@ use function count;
 use function microtime;
 use const INF;
 
-final class NetherNetServer implements ServerInterface{
+final class NetherNetServer implements ServerInterface, SignalingRegistry{
 
 	/**
-	 * @var Signaling[]
-	 * @phpstan-var list<Signaling>
+	 * @var array[]
+	 * @phpstan-var array<int, array{Signaling, bool}> signaling and whether it is optional
 	 */
 	private array $signaling = [];
 
@@ -76,11 +77,11 @@ final class NetherNetServer implements ServerInterface{
 	/**
 	 * @throws \LogicException
 	 */
-	public function addSignaling(Signaling $signaling) : void{
+	public function addSignaling(Signaling $signaling, bool $optional = false) : void{
 		if($this->state !== ServerState::CREATED){
 			throw new \LogicException("Signaling transports must be added before the server is started");
 		}
-		$this->signaling[] = $signaling;
+		$this->signaling[] = [$signaling, $optional];
 	}
 
 	/**
@@ -93,9 +94,24 @@ final class NetherNetServer implements ServerInterface{
 		}
 
 		$context = new SignalingContext($this->negotiator, $this->blockTracker, $this->logger);
+		$hadSignaling = count($this->signaling) > 0;
 		try{
-			foreach($this->signaling as $signaling){
-				$signaling->start($context);
+			foreach($this->signaling as $index => [$signaling, $optional]){
+				try{
+					$signaling->start($context);
+				}catch(SignalingException $e){
+					if(!$optional){
+						throw $e;
+					}
+					$this->logger->warning("Unable to start " . $signaling->describe() . ": " . $e->getMessage());
+					$signaling->shutdown();
+					unset($this->signaling[$index]);
+					continue;
+				}
+				$this->logger->info("Started " . $signaling->describe());
+			}
+			if($hadSignaling && count($this->signaling) === 0){
+				throw new SignalingException("No signaling transport could be started");
 			}
 		}catch(SignalingException $e){
 			$this->shutdown();
@@ -116,7 +132,7 @@ final class NetherNetServer implements ServerInterface{
 		$this->blockTracker->update($now);
 
 		if($this->state === ServerState::RUNNING){
-			foreach($this->signaling as $signaling){
+			foreach($this->signaling as [$signaling, $_]){
 				$signaling->tick($now);
 			}
 
@@ -240,7 +256,7 @@ final class NetherNetServer implements ServerInterface{
 	}
 
 	private function stopAcceptingConnections() : void{
-		foreach($this->signaling as $signaling){
+		foreach($this->signaling as [$signaling, $_]){
 			$signaling->shutdown();
 		}
 		$this->negotiator->shutdown();

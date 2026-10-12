@@ -36,16 +36,17 @@ final class NetherNetServerTest extends TestCase{
 	private FakeNegotiator $negotiator;
 	private RecordingEventListener $listener;
 	private NetherNetServer $server;
+	private RecordingLogger $logger;
 
 	protected function setUp() : void{
-		$logger = new RecordingLogger();
+		$this->logger = new RecordingLogger();
 		$this->negotiator = new FakeNegotiator();
 		$this->listener = new RecordingEventListener();
 		$this->server = new NetherNetServer(
 			$this->negotiator,
 			$this->listener,
 			new ConnectionBudgetConfiguration(),
-			$logger
+			$this->logger
 		);
 	}
 
@@ -93,6 +94,54 @@ final class NetherNetServerTest extends TestCase{
 			self::assertSame(1, $started->shutdowns);
 			self::assertTrue($this->negotiator->shutDown);
 		}
+	}
+
+	public function testOptionalTransportFailingToStartDoesNotPreventStart() : void{
+		$this->server->addSignaling($required = new FakeSignaling());
+		$this->server->addSignaling($optional = new FakeSignaling(failToStart: true), optional: true);
+
+		$this->server->start();
+		$this->server->tick(1.0);
+
+		self::assertTrue($this->server->isRunning());
+		self::assertSame([1.0], $required->ticks);
+		self::assertSame([], $optional->ticks);
+		self::assertSame(1, $optional->shutdowns);
+		self::assertContains("warning: Unable to start fake signaling: start refused by the test", $this->logger->messages);
+		self::assertContains("info: Started fake signaling", $this->logger->messages);
+
+		$this->server->shutdown();
+		self::assertSame(1, $optional->shutdowns);
+		self::assertSame(1, $required->shutdowns);
+	}
+
+	public function testOptionalTransportThatFailedIsNotShutDownAgainWhenARequiredOneFails() : void{
+		$this->server->addSignaling($failed = new FakeSignaling(failToStart: true), optional: true);
+		$this->server->addSignaling(new FakeSignaling(failToStart: true));
+
+		try{
+			$this->server->start();
+			self::fail("the server started without a required transport");
+		}catch(SignalingException){
+			self::assertSame(1, $failed->shutdowns);
+		}
+	}
+
+	public function testStartFailsWhenEveryTransportWasOptionalAndFailed() : void{
+		$this->server->addSignaling(new FakeSignaling(failToStart: true), optional: true);
+
+		$this->expectException(SignalingException::class);
+		try{
+			$this->server->start();
+		}finally{
+			self::assertSame(ServerState::STOPPED, $this->server->getState());
+		}
+	}
+
+	public function testServerWithoutTransportsStarts() : void{
+		$this->server->start();
+
+		self::assertTrue($this->server->isRunning());
 	}
 
 	public function testStartingTwiceIsRefused() : void{

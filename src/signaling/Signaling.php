@@ -16,6 +16,8 @@ namespace pocketmine\nethernet\signaling;
 
 interface Signaling{
 
+	public function describe() : string;
+
 	/**
 	 * @throws SignalingException
 	 * @throws \LogicException if already started or shut down
@@ -24,5 +26,8 @@ interface Signaling{
 
 	public function tick(float $now) : void;
 
+	/**
+	 * Must be safe to call even if {@link Signaling::start()} failed or was never called.
+	 */
 	public function shutdown() : void;
 }

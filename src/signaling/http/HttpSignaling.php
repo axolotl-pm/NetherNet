@@ -81,6 +81,10 @@ final class HttpSignaling implements Signaling{
 		return $this->socket?->getBindAddress() ?? throw new \LogicException("HTTP signaling is not listening");
 	}
 
+	public function describe() : string{
+		return "HTTP signaling on " . ($this->socket?->getBindAddress() ?? $this->bindAddress);
+	}
+
 	public function start(SignalingContext $context) : void{
 		$this->state->checkCanStart();
 
