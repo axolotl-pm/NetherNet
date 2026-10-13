@@ -24,7 +24,7 @@ use function strcasecmp;
  */
 final class Fingerprint{
 
-	private const ALGORITHM_PATTERN = '/^[A-Za-z0-9][A-Za-z0-9-]*$/';
+	private const ALGORITHM = "sha-256";
 	private const DIGEST_PATTERN = '/^[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2})*$/';
 
 	/**
@@ -34,8 +34,8 @@ final class Fingerprint{
 		private readonly string $algorithm,
 		private readonly string $digest
 	){
-		if(preg_match(self::ALGORITHM_PATTERN, $algorithm) !== 1){
-			throw new SdpException("Fingerprint algorithm is not a valid SDP token: $algorithm");
+		if(strcasecmp($algorithm, self::ALGORITHM) !== 0){
+			throw new SdpException("Fingerprint algorithm must be " . self::ALGORITHM . ", got: $algorithm");
 		}
 		if(preg_match(self::DIGEST_PATTERN, $digest) !== 1){
 			throw new SdpException("Fingerprint digest is not colon-separated hex: $digest");
