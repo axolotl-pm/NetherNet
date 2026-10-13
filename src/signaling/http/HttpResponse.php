@@ -21,6 +21,11 @@ use function strlen;
  */
 final class HttpResponse{
 
+	public const HEADER_CONTENT_TYPE = "Content-Type";
+	public const HEADER_CONTENT_LENGTH = "Content-Length";
+	public const HEADER_CONNECTION = "Connection";
+	public const HEADER_LOCATION = "Location";
+
 	/**
 	 * @param string[] $headers
 	 * @phpstan-param array<string, string> $headers
@@ -38,13 +43,13 @@ final class HttpResponse{
 	public function encode(bool $omitBody = false) : string{
 		$head = "HTTP/1.1 " . $this->status->value . " " . $this->status->getReasonPhrase() . "\r\n";
 		if($this->contentType !== null){
-			$head .= "Content-Type: $this->contentType\r\n";
+			$head .= self::HEADER_CONTENT_TYPE . ": $this->contentType\r\n";
 		}
 		foreach($this->headers as $name => $value){
 			$head .= "$name: $value\r\n";
 		}
-		$head .= "Content-Length: " . strlen($this->body) . "\r\n";
-		$head .= "Connection: close\r\n\r\n";
+		$head .= self::HEADER_CONTENT_LENGTH . ": " . strlen($this->body) . "\r\n";
+		$head .= self::HEADER_CONNECTION . ": close\r\n\r\n";
 
 		return $head . ($omitBody ? "" : $this->body);
 	}

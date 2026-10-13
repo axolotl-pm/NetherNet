@@ -256,7 +256,7 @@ final class HttpConnection{
 			/* 308 has the client repeat the request, method and body included, against the address it is given. */
 			$this->respond(new HttpResponse(
 				HttpStatus::PERMANENT_REDIRECT,
-				headers: ["Location" => "https://" . ($this->request->getHeader("host") ?? "") . $this->request->target]
+				headers: [HttpResponse::HEADER_LOCATION => "https://" . ($this->request->getHeader(HttpRequest::HEADER_HOST) ?? "") . $this->request->target]
 			), $now);
 
 			return false;
@@ -264,7 +264,7 @@ final class HttpConnection{
 
 		/* Turns away what cannot be served before any of its body is read. */
 		$handler->route($this->request);
-		$expectsContinue = strcasecmp(trim($this->request->getHeader("expect") ?? ""), "100-continue") === 0;
+		$expectsContinue = strcasecmp(trim($this->request->getHeader(HttpRequest::HEADER_EXPECT) ?? ""), "100-continue") === 0;
 		$this->contentLength = $this->request->method === HttpRequest::METHOD_POST ? $this->request->getContentLength(self::MAX_BODY_SIZE) : 0;
 		$this->transitionTo(HttpConnectionState::READING_BODY, $this->requestStart + self::BODY_TIMEOUT);
 

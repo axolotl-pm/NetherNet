@@ -37,6 +37,10 @@ final class HttpRequest{
 
 	public const HEADER_CONTENT_LENGTH = "content-length";
 	public const HEADER_TRANSFER_ENCODING = "transfer-encoding";
+	public const HEADER_CONTENT_TYPE = "content-type";
+	public const HEADER_CONNECTION = "connection";
+	public const HEADER_HOST = "host";
+	public const HEADER_EXPECT = "expect";
 
 	/**
 	 * Headers where duplicates are strictly disallowed to prevent request smuggling.
@@ -44,9 +48,9 @@ final class HttpRequest{
 	private const DECISIVE_HEADERS = [
 		self::HEADER_CONTENT_LENGTH => true,
 		self::HEADER_TRANSFER_ENCODING => true,
-		"content-type" => true,
-		"connection" => true,
-		"host" => true
+		self::HEADER_CONTENT_TYPE => true,
+		self::HEADER_CONNECTION => true,
+		self::HEADER_HOST => true
 	];
 
 	private const TOKEN_PATTERN = '/^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+$/';
@@ -118,7 +122,7 @@ final class HttpRequest{
 			throw new HttpException(HttpStatus::NOT_IMPLEMENTED, "Transfer-Encoding is not supported");
 		}
 
-		if(!isset($headers["host"])){
+		if(!isset($headers[self::HEADER_HOST])){
 			throw new HttpException(HttpStatus::BAD_REQUEST, "Host header is required");
 		}
 
@@ -165,7 +169,7 @@ final class HttpRequest{
 	}
 
 	public function hasContentType(string $expected) : bool{
-		$value = $this->getHeader("content-type");
+		$value = $this->getHeader(self::HEADER_CONTENT_TYPE);
 		if($value === null){
 			return false;
 		}
