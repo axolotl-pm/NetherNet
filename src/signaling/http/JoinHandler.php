@@ -106,8 +106,11 @@ final class JoinHandler{
 		$clientAddress = $peerAddress?->ip;
 		if($clientAddress !== null && $this->reverseProxy !== null && $this->reverseProxy->trusts($clientAddress)){
 			$clientAddress = $this->reverseProxy->clientAddress($request);
-			if($clientAddress === null){
-				$this->logger->debug("$peerAddress: no client address in the proxy headers");
+			//probes are allowed through, a proxy's health check names no client
+			if($clientAddress === null && $networkId !== null){
+				$this->logger->warning("Refused an offer from trusted proxy $peerAddress without a usable " . $this->reverseProxy->getHeader() . " header");
+
+				throw new HttpException(HttpStatus::BAD_REQUEST, "No client address in the " . $this->reverseProxy->getHeader() . " header");
 			}
 		}
 		if($clientAddress !== null && $this->blockList->isBlocked($clientAddress)){

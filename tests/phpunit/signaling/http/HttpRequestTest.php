@@ -94,6 +94,12 @@ final class HttpRequestTest extends TestCase{
 		$request->getContentLength(1024);
 	}
 
+	public function testRepeatedHeaderLinesAreJoinedIntoOneList() : void{
+		$request = HttpRequest::parse("GET /v1/join HTTP/1.1\r\nHost: example.test\r\nX-Forwarded-For: 1.2.3.4\r\nx-forwarded-for: 5.6.7.8, 9.10.11.12");
+
+		self::assertSame("1.2.3.4, 5.6.7.8, 9.10.11.12", $request->getHeader("X-Forwarded-For"));
+	}
+
 	public function testBareLineFeedsAreAccepted() : void{
 		$request = HttpRequest::parse("GET /v1/join HTTP/1.1\nHost: example.test");
 

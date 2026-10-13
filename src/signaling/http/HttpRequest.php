@@ -53,7 +53,7 @@ final class HttpRequest{
 		self::HEADER_HOST => true
 	];
 
-	private const TOKEN_PATTERN = '/^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+$/';
+	public const TOKEN_PATTERN = '/^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+\z/';
 
 	/**
 	 * @phpstan-param array<string, string> $headers
@@ -115,7 +115,8 @@ final class HttpRequest{
 				throw new HttpException(HttpStatus::BAD_REQUEST, "Header \"$name\" contains a control character");
 			}
 
-			$headers[$name] = $value;
+			//repeated header lines form one list (RFC 9110)
+			$headers[$name] = isset($headers[$name]) ? $headers[$name] . ", " . $value : $value;
 		}
 
 		if(isset($headers[self::HEADER_TRANSFER_ENCODING])){

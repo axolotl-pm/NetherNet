@@ -159,11 +159,21 @@ final class HttpSignalingTest extends TestCase{
 
 	public function testTrustedProxyHeaderReplacesThePeerAddress() : void{
 		$negotiator = new FakeNegotiator("answer");
-		$this->start($negotiator, reverseProxy: ReverseProxy::nginx(["127.0.0.1"]));
+		$this->start($negotiator, reverseProxy: new ReverseProxy(ReverseProxy::HEADER_REAL_IP, ["127.0.0.1"]));
 
 		$this->exchange($this->connect(), "POST /v1/join/1 HTTP/1.1\r\nHost: h\r\nX-Real-IP: 203.0.113.7\r\nContent-Type: application/sdp\r\nContent-Length: 5\r\n\r\noffer");
 
 		self::assertSame("203.0.113.7", $negotiator->lastPeerAddress);
+	}
+
+	public function testOfferFromATrustedProxyWithoutItsHeaderIsRefused() : void{
+		$negotiator = new FakeNegotiator("answer");
+		$this->start($negotiator, reverseProxy: new ReverseProxy(ReverseProxy::HEADER_REAL_IP, ["127.0.0.1"]));
+
+		$response = $this->exchange($this->connect(), "POST /v1/join/1 HTTP/1.1\r\nHost: h\r\nX-Forwarded-For: 203.0.113.7\r\nContent-Type: application/sdp\r\nContent-Length: 5\r\n\r\noffer");
+
+		self::assertStringStartsWith("HTTP/1.1 400 ", $response);
+		self::assertNull($negotiator->lastOffer);
 	}
 
 	/**
@@ -171,7 +181,7 @@ final class HttpSignalingTest extends TestCase{
 	 */
 	public function testProxyHeaderFromAnUntrustedPeerIsIgnored() : void{
 		$negotiator = new FakeNegotiator("answer");
-		$this->start($negotiator, reverseProxy: ReverseProxy::nginx(["10.0.0.0/8"]));
+		$this->start($negotiator, reverseProxy: new ReverseProxy(ReverseProxy::HEADER_REAL_IP, ["10.0.0.0/8"]));
 
 		$this->exchange($this->connect(), "POST /v1/join/1 HTTP/1.1\r\nHost: h\r\nX-Real-IP: 203.0.113.7\r\nContent-Type: application/sdp\r\nContent-Length: 5\r\n\r\noffer");
 

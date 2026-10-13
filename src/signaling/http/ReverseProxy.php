@@ -18,7 +18,7 @@ use function array_reverse;
 use function count;
 use function ctype_digit;
 use function explode;
-use function filter_var;
+use function inet_ntop;
 use function inet_pton;
 use function ord;
 use function preg_match;
@@ -29,31 +29,43 @@ use function strlen;
 use function strpos;
 use function substr;
 use function trim;
-use const FILTER_VALIDATE_IP;
 
+/**
+ * Resolves the client address from the single header the proxy writes. Any other header is client-controlled.
+ */
 final class ReverseProxy{
 
 	public const HEADER_FORWARDED_FOR = "X-Forwarded-For";
 	public const HEADER_REAL_IP = "X-Real-IP";
 	public const HEADER_CF_CONNECTING_IP = "CF-Connecting-IP";
 
+	/** RFC 7239 header, rejected because its `for=...;proto=...` syntax is not parsed. */
+	private const HEADER_FORWARDED = "Forwarded";
+
+	private const IPV4_MAPPED_PREFIX = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff";
+
 	/** @phpstan-var list<array{string, int}> packed address and prefix length */
 	private array $networks = [];
 
+	/** Whether the header is a list of hops rather than a single address. */
+	private readonly bool $list;
+
 	/**
-	 * @param string[] $headers  Headers to read the client address from, in order of preference.
+	 * @param string   $header   Header the proxy writes the client address to.
 	 * @param string[] $networks Addresses or CIDR blocks of the proxies to trust.
-	 * @phpstan-param non-empty-list<string> $headers
 	 * @phpstan-param non-empty-list<string> $networks
 	 *
-	 * @throws \InvalidArgumentException if a network cannot be parsed
+	 * @throws \InvalidArgumentException if the header is not usable or a network cannot be parsed
 	 */
 	public function __construct(
-		private readonly array $headers,
+		private readonly string $header,
 		array $networks
 	){
-		if(count($headers) === 0){
-			throw new \InvalidArgumentException("At least one header must be specified to resolve client address");
+		if(preg_match(HttpRequest::TOKEN_PATTERN, $header) !== 1){
+			throw new \InvalidArgumentException("\"$header\" is not a valid header name");
+		}
+		if(strcasecmp($header, self::HEADER_FORWARDED) === 0){
+			throw new \InvalidArgumentException("The " . self::HEADER_FORWARDED . " header is not supported");
 		}
 		if(count($networks) === 0){
 			throw new \InvalidArgumentException("At least one trusted proxy network must be specified");
@@ -61,31 +73,10 @@ final class ReverseProxy{
 		foreach($networks as $network){
 			$this->networks[] = self::parseNetwork($network);
 		}
+		$this->list = strcasecmp($header, self::HEADER_FORWARDED_FOR) === 0;
 	}
 
-	/**
-	 * @param string[] $networks
-	 * @phpstan-param non-empty-list<string> $networks
-	 */
-	public static function nginx(array $networks) : self{
-		return new self([self::HEADER_REAL_IP, self::HEADER_FORWARDED_FOR], $networks);
-	}
-
-	/**
-	 * @param string[] $networks
-	 * @phpstan-param non-empty-list<string> $networks
-	 */
-	public static function caddy(array $networks) : self{
-		return new self([self::HEADER_FORWARDED_FOR], $networks);
-	}
-
-	/**
-	 * @param string[] $networks
-	 * @phpstan-param non-empty-list<string> $networks
-	 */
-	public static function cloudflare(array $networks) : self{
-		return new self([self::HEADER_CF_CONNECTING_IP, self::HEADER_FORWARDED_FOR], $networks);
-	}
+	public function getHeader() : string{ return $this->header; }
 
 	public function trusts(string $address) : bool{
 		$packed = @inet_pton($address);
@@ -102,42 +93,33 @@ final class ReverseProxy{
 	}
 
 	/**
-	 * Returns the client IP address from the request headers, or null if no valid address is found.
+	 * Returns the client address, or null if the header is missing or unusable.
 	 *
-	 * For X-Forwarded-For, addresses are evaluated from right to left, skipping trusted proxies to find
-	 * the originating client address.
+	 * A list of hops is read right to left up to the first untrusted address, or the leftmost if all are trusted.
 	 */
 	public function clientAddress(HttpRequest $request) : ?string{
-		foreach($this->headers as $header){
-			$value = $request->getHeader($header);
-			if($value === null){
-				continue;
-			}
+		$value = $request->getHeader($this->header);
+		if($value === null){
+			return null;
+		}
+		if(!$this->list){
+			return self::normalize($value);
+		}
 
-			if(strcasecmp($header, self::HEADER_FORWARDED_FOR) === 0){
-				foreach(array_reverse(explode(",", $value)) as $entry){
-					$address = self::normalize($entry);
-					if($address === null){
-						continue;
-					}
-					if(!$this->trusts($address)){
-						return $address;
-					}
-				}
-				continue;
-			}
-
-			$address = self::normalize($value);
-			if($address !== null){
-				return $address;
+		$address = null;
+		foreach(array_reverse(explode(",", $value)) as $entry){
+			$address = self::normalize($entry);
+			//entries further left are client-controlled
+			if($address === null || !$this->trusts($address)){
+				break;
 			}
 		}
 
-		return null;
+		return $address;
 	}
 
 	/**
-	 * Normalizes an IP address by stripping IPv6 brackets and port numbers. Returns null if invalid.
+	 * Returns the canonical IP without brackets or port, unmapping IPv4-mapped addresses, or null if invalid.
 	 */
 	private static function normalize(string $entry) : ?string{
 		$entry = trim($entry);
@@ -151,7 +133,16 @@ final class ReverseProxy{
 			$entry = $matches[1];
 		}
 
-		return filter_var($entry, FILTER_VALIDATE_IP) !== false ? $entry : null;
+		$packed = @inet_pton($entry);
+		if($packed === false){
+			return null;
+		}
+		if(strlen($packed) === 16 && str_starts_with($packed, self::IPV4_MAPPED_PREFIX)){
+			$packed = substr($packed, strlen(self::IPV4_MAPPED_PREFIX));
+		}
+		$normalized = inet_ntop($packed);
+
+		return $normalized === false ? null : $normalized;
 	}
 
 	/**

@@ -102,10 +102,33 @@ final class JoinHandlerTest extends TestCase{
 	 */
 	public function testBlockIsJudgedAgainstTheAddressATrustedProxyNames() : void{
 		$this->blockTracker->block("203.0.113.5");
-		$handler = $this->handler(ReverseProxy::nginx(["192.0.2.10"]));
+		$handler = $this->handler(new ReverseProxy(ReverseProxy::HEADER_FORWARDED_FOR, ["192.0.2.10"]));
 		$request = self::offer(headers: "X-Forwarded-For: 203.0.113.5\r\n");
 
 		self::assertNull($handler->handle($request, "offer", self::peer()));
+	}
+
+	public function testOfferFromATrustedProxyThatNamesNoClientIsRefused() : void{
+		$handler = $this->handler(new ReverseProxy(ReverseProxy::HEADER_REAL_IP, ["192.0.2.10"]));
+
+		foreach(["", "X-Forwarded-For: 203.0.113.5\r\n", "X-Real-IP: unknown\r\n"] as $headers){
+			try{
+				$handler->handle(self::offer(headers: $headers), "offer", self::peer());
+				self::fail("the offer was accepted");
+			}catch(HttpException $e){
+				self::assertSame(HttpStatus::BAD_REQUEST, $e->getStatus());
+			}
+		}
+		self::assertNull($this->negotiator->lastOffer);
+	}
+
+	public function testProbeFromATrustedProxyThatNamesNoClientIsAnswered() : void{
+		$handler = $this->handler(new ReverseProxy(ReverseProxy::HEADER_REAL_IP, ["192.0.2.10"]));
+
+		$response = $handler->handle(self::request("GET /v1/join"), "", self::peer());
+
+		self::assertInstanceOf(HttpResponse::class, $response);
+		self::assertSame(HttpStatus::OK, $response->status);
 	}
 
 	public function testOfferTheNegotiatorRefusesIsReportedAsItsErrorCode() : void{
