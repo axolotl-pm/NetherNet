@@ -50,7 +50,10 @@ final class AnswerBuilder{
 		if($candidateMode === CandidateMode::TRICKLE){
 			$answer = $answer->withoutCandidates();
 		}elseif($this->advertisedAddresses !== null){
-			$answer = $answer->withCandidates(IceCandidateFormatter::advertise($answer->getMediaAttributeValues("candidate"), $this->advertisedAddresses));
+			//the transport writes its default candidate's address to the connection line
+			$answer = $answer
+				->withCandidates(IceCandidateFormatter::advertise($answer->getMediaAttributeValues("candidate"), $this->advertisedAddresses))
+				->withoutConnectionAddress();
 		}
 		if($candidateMode === CandidateMode::BUNDLED && $answer->countCandidates() === 0){
 			throw new NegotiationException("No local candidates to answer with", ErrorCode::ICE);

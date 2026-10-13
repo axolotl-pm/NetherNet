@@ -215,6 +215,18 @@ final class SessionDescription{
 	}
 
 	/**
+	 * Returns a copy whose connection lines hold the placeholder for no default candidate (RFC 9429 section 5.2.1).
+	 */
+	public function withoutConnectionAddress() : self{
+		$lines = [];
+		foreach($this->lines as $line){
+			$lines[] = str_starts_with($line, "c=") ? "c=IN IP4 0.0.0.0" : $line;
+		}
+
+		return new self($lines, $this->mediaStart);
+	}
+
+	/**
 	 * Returns a copy whose ICE candidates are replaced with the given ones, placed at the position of the first
 	 * candidate (before end-of-candidates, or at the end of the media section if none exist).
 	 *
