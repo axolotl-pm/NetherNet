@@ -274,17 +274,14 @@ final class LanSignaling implements Signaling{
 
 	private function handlePeerError(Signal $signal, string $key) : void{
 		$connection = $this->connections[$key] ?? null;
-		if($connection === null){
+		//signals are not authenticated, so one must not be able to end an established session
+		if($connection === null || $connection->negotiation->isFinished()){
 			return;
 		}
 
 		/* The peer already knows the connection failed, so it is dropped here rather than reported back. */
 		unset($this->connections[$key]);
-		if($connection->negotiation->isFinished()){
-			$connection->negotiation->close();
-		}else{
-			$connection->negotiation->fail("Peer reported error code " . $signal->data, ErrorCode::GENERIC_FAILURE);
-		}
+		$connection->negotiation->fail("Peer reported error code " . $signal->data, ErrorCode::GENERIC_FAILURE);
 	}
 
 	private function countNegotiating() : int{
