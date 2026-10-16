@@ -223,6 +223,10 @@ final class SessionManagerTest extends TestCase{
 		$reliable->buffered = 0;
 		$this->manager->tick(1.3);
 		self::assertSame([[$id, 10], [$id, 11]], $this->listener->acks);
+
+		$session->send("dddd", receiptId: 12);
+		$this->manager->tick(1.4);
+		self::assertSame([[$id, 10], [$id, 11], [$id, 12]], $this->listener->acks, "a receipt queued after the queue drained was lost");
 	}
 
 	public function testReceiptsStillArriveWhileADisconnectFlushes() : void{

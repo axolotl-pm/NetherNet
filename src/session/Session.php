@@ -25,7 +25,6 @@ use pocketmine\nethernet\transport\PeerTransport;
 use pocketmine\nethernet\transport\TransportException;
 use pocketmine\nethernet\transport\TransportState;
 use pocketmine\nethernet\utils\InternetAddress;
-use function array_slice;
 use function count;
 use function strlen;
 
@@ -53,9 +52,11 @@ final class Session{
 
 	/**
 	 * Receipts not yet acknowledged, oldest first, each with the queued byte count its packet ended at.
-	 * @phpstan-var array<string, list<array{int, int}>>
+	 * @phpstan-var array<string, \SplQueue<array{int, int}>>
 	 */
 	private array $pendingReceipts = [];
+
+	private int $pendingReceiptCount = 0;
 
 	/** Measured from the first update that finds the disconnect pending. */
 	private ?float $disconnectDeadline = null;
@@ -73,7 +74,7 @@ final class Session{
 		foreach(Reliability::cases() as $reliability){
 			$assemblers[$reliability->name] = new Assembler($reliability->isFragmentationSupported(), $budget->maxPayloadSize);
 			$this->queuedBytes[$reliability->name] = 0;
-			$this->pendingReceipts[$reliability->name] = [];
+			$this->pendingReceipts[$reliability->name] = new \SplQueue();
 		}
 		$this->assemblers = $assemblers;
 	}
@@ -123,7 +124,8 @@ final class Session{
 		}
 
 		if($receiptId !== null){
-			$this->pendingReceipts[$reliability->name][] = [$receiptId, $this->queuedBytes[$reliability->name]];
+			$this->pendingReceipts[$reliability->name]->enqueue([$receiptId, $this->queuedBytes[$reliability->name]]);
+			++$this->pendingReceiptCount;
 		}
 	}
 
@@ -132,28 +134,26 @@ final class Session{
 	 * @phpstan-return list<int>
 	 */
 	public function takeAcknowledgedReceipts() : array{
-		if($this->state === SessionState::DISCONNECTED){
+		if($this->state === SessionState::DISCONNECTED || $this->pendingReceiptCount === 0){
 			return [];
 		}
 
 		$acknowledged = [];
 		foreach(Reliability::cases() as $reliability){
 			$pending = $this->pendingReceipts[$reliability->name];
-			if(count($pending) === 0){
+			if($pending->isEmpty()){
 				continue;
 			}
 
 			$delivered = $this->queuedBytes[$reliability->name] - $this->channels->get($reliability)->getBufferedAmount();
-			$taken = 0;
-			foreach($pending as [$receiptId, $watermark]){
+			while(!$pending->isEmpty()){
+				[$receiptId, $watermark] = $pending->bottom();
 				if($watermark > $delivered){
 					break;
 				}
+				$pending->dequeue();
+				--$this->pendingReceiptCount;
 				$acknowledged[] = $receiptId;
-				++$taken;
-			}
-			if($taken > 0){
-				$this->pendingReceipts[$reliability->name] = array_slice($pending, $taken);
 			}
 		}
 

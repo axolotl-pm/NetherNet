@@ -108,7 +108,6 @@ final class SessionManager{
 				continue;
 			}
 
-			$this->collectBandwidth($session);
 			if($session->isConnected()){
 				$this->processIncoming($session);
 			}
@@ -162,6 +161,10 @@ final class SessionManager{
 	}
 
 	private function reportStats() : void{
+		foreach($this->sessions as $session){
+			$this->collectBandwidth($session);
+		}
+
 		if($this->bytesSentDiff > 0 || $this->bytesReceivedDiff > 0){
 			$this->listener->onBandwidthStatsUpdate($this->bytesSentDiff, $this->bytesReceivedDiff);
 			$this->bytesSentDiff = 0;
