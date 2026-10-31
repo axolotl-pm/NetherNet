@@ -18,7 +18,7 @@ enum ServerState{
 	case CREATED;
 	case RUNNING;
 	/**
-	 * No longer accepting connections; remaining sessions are flushing before they close.
+	 * No longer accepting connections; remaining sessions are disconnecting gracefully.
 	 */
 	case STOPPING;
 	case STOPPED;

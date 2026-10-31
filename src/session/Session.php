@@ -33,8 +33,8 @@ use function strlen;
  */
 final class Session{
 
-	/** Timeout in seconds to flush queued outgoing data before disconnecting. */
-	public const DISCONNECT_FLUSH_TIMEOUT = 2.0;
+	/** Timeout in seconds for a graceful disconnect before the session is forcibly closed. */
+	public const DISCONNECT_TIMEOUT = 3.0;
 
 	/** @phpstan-var array<string, Assembler> keyed by Reliability case name */
 	private readonly array $assemblers;
@@ -60,6 +60,8 @@ final class Session{
 
 	/** Measured from the first update that finds the disconnect pending. */
 	private ?float $disconnectDeadline = null;
+	/** Whether a pending disconnect waits for the peer to close, not only for queued data to leave. */
+	private bool $awaitPeerClose = true;
 
 	public function __construct(
 		private readonly int $id,
@@ -225,8 +227,11 @@ final class Session{
 		}
 
 		if($this->state === SessionState::DISCONNECT_PENDING){
-			$this->disconnectDeadline ??= $now + self::DISCONNECT_FLUSH_TIMEOUT;
-			if($this->bufferedBytes() === 0 || $transportState !== TransportState::CONNECTED || $now >= $this->disconnectDeadline){
+			$this->disconnectDeadline ??= $now + self::DISCONNECT_TIMEOUT;
+			/* An empty send buffer does not mean the peer has handled the data (e.g. a transfer), so let it close first. */
+			$completed = $this->awaitPeerClose ? $this->hasClosedChannel() : $this->bufferedBytes() === 0;
+			$channelFailed = !$this->discardIncoming();
+			if($completed || $channelFailed || $transportState !== TransportState::CONNECTED || $now >= $this->disconnectDeadline){
 				$this->forciblyDisconnect($this->disconnectReason ?? DisconnectReason::SERVER_DISCONNECT);
 			}
 
@@ -261,6 +266,19 @@ final class Session{
 		}
 	}
 
+	/** Drops what the peer sends while disconnecting. Returns false if a channel failed. */
+	private function discardIncoming() : bool{
+		foreach($this->channels->all() as $channel){
+			try{
+				while($channel->receive() !== null);
+			}catch(TransportException){
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	private function hasClosedChannel() : bool{
 		foreach($this->channels->all() as $channel){
 			if($channel->isClosed()){
@@ -275,13 +293,17 @@ final class Session{
 		return $this->transport->hasLostConnectivity() ? DisconnectReason::CONNECTION_FAILED : DisconnectReason::PEER_DISCONNECT;
 	}
 
-	public function initiateDisconnect(DisconnectReason $reason) : void{
+	/**
+	 * @param bool $awaitPeerClose false to close once queued data has left, e.g. for a blocked peer
+	 */
+	public function initiateDisconnect(DisconnectReason $reason, bool $awaitPeerClose = true) : void{
 		if($this->state !== SessionState::CONNECTED){
 			return;
 		}
 
 		$this->state = SessionState::DISCONNECT_PENDING;
 		$this->disconnectReason = $reason;
+		$this->awaitPeerClose = $awaitPeerClose;
 	}
 
 	private function bufferedBytes() : int{

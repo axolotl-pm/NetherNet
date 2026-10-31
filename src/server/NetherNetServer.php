@@ -197,7 +197,7 @@ final class NetherNetServer implements ServerInterface, SignalingRegistry{
 
 			/* A reliable packet that can never reach the peer leaves a hole in a stream that was promised whole. */
 			$this->logger->debug("Closing session $sessionId: " . $e->getMessage());
-			$session->initiateDisconnect(DisconnectReason::SEND_FAILED);
+			$session->initiateDisconnect(DisconnectReason::SEND_FAILED, awaitPeerClose: false);
 		}
 	}
 
@@ -213,7 +213,7 @@ final class NetherNetServer implements ServerInterface, SignalingRegistry{
 		foreach($this->sessionManager->getSessions() as $session){
 			$sessionIp = $session->getRemoteAddress()->ip;
 			if((InternetAddress::normalizeIp($sessionIp) ?? $sessionIp) === $blocked || $session->getClientAddress() === $blocked){
-				$session->initiateDisconnect(DisconnectReason::ADDRESS_BLOCKED);
+				$session->initiateDisconnect(DisconnectReason::ADDRESS_BLOCKED, awaitPeerClose: false);
 			}
 		}
 	}
@@ -224,7 +224,7 @@ final class NetherNetServer implements ServerInterface, SignalingRegistry{
 	}
 
 	/**
-	 * Stops accepting connections and lets sessions flush; keep ticking until the state is STOPPED.
+	 * Stops accepting connections and lets sessions disconnect gracefully; keep ticking until the state is STOPPED.
 	 */
 	public function initiateShutdown(DisconnectReason $reason = DisconnectReason::SERVER_SHUTDOWN) : void{
 		if($this->state !== ServerState::RUNNING){
