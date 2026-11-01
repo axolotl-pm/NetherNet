@@ -102,7 +102,7 @@ final class SessionTest extends TestCase{
 		}
 	}
 
-	public function testPendingDisconnectWaitsForQueuedDataToLeave() : void{
+	public function testPendingDisconnectWaitsForThePeerToClose() : void{
 		$session = $this->open();
 		$this->reliable->buffered = 100;
 
@@ -114,22 +114,28 @@ final class SessionTest extends TestCase{
 
 		$this->reliable->buffered = 0;
 		$session->update(50.1);
+		self::assertFalse($session->isFullyDisconnected(), "the session closed before the peer had a chance to read what was sent");
+
+		//the peer closes once it has handled the last packets
+		$this->reliable->closed = true;
+		$session->update(50.2);
 		self::assertTrue($session->isFullyDisconnected());
 		self::assertSame(DisconnectReason::SERVER_DISCONNECT, $session->getDisconnectReason());
 		self::assertTrue($this->transport->closed);
 	}
 
-	public function testPendingDisconnectGivesUpAfterTheFlushTimeout() : void{
+	public function testPendingDisconnectGivesUpAfterTheTimeout() : void{
 		$session = $this->open();
 		$this->reliable->buffered = 100;
 
 		$session->initiateDisconnect(DisconnectReason::SERVER_SHUTDOWN);
 		$session->update(50.0);
-		$session->update(50.0 + Session::DISCONNECT_FLUSH_TIMEOUT - 0.01);
+		$this->reliable->buffered = 0;
+		$session->update(50.0 + Session::DISCONNECT_TIMEOUT - 0.01);
 		self::assertFalse($session->isConnected());
 		self::assertFalse($session->isFullyDisconnected());
 
-		$session->update(50.0 + Session::DISCONNECT_FLUSH_TIMEOUT);
+		$session->update(50.0 + Session::DISCONNECT_TIMEOUT);
 		self::assertTrue($session->isFullyDisconnected());
 		self::assertSame(DisconnectReason::SERVER_SHUTDOWN, $session->getDisconnectReason());
 	}

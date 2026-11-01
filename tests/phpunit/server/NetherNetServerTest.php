@@ -24,6 +24,7 @@ use pocketmine\nethernet\protocol\DisconnectReason;
 use pocketmine\nethernet\protocol\Reliability;
 use pocketmine\nethernet\RecordingEventListener;
 use pocketmine\nethernet\RecordingLogger;
+use pocketmine\nethernet\session\Session;
 use pocketmine\nethernet\signaling\SignalingException;
 use pocketmine\nethernet\transport\ChannelPair;
 use pocketmine\nethernet\transport\ConnectionBudgetConfiguration;
@@ -245,6 +246,10 @@ final class NetherNetServerTest extends TestCase{
 
 		$reliable->buffered = 0;
 		$this->server->tick(1.2);
+		self::assertSame(ServerState::STOPPING, $this->server->getState(), "the server stopped before the peer had a chance to read what was flushed");
+
+		$reliable->closed = true;
+		$this->server->tick(1.3);
 
 		self::assertSame([[$sessionId, DisconnectReason::SERVER_SHUTDOWN]], $this->listener->closed);
 		self::assertSame(ServerState::STOPPED, $this->server->getState());
@@ -314,6 +319,7 @@ final class NetherNetServerTest extends TestCase{
 		$this->listener->onOpen = fn(int $sessionId) => $this->server->closeSession($sessionId, DisconnectReason::REJECTED_BY_HOST);
 
 		$this->server->tick(1.0);
+		$this->server->tick(1.0 + Session::DISCONNECT_TIMEOUT);
 
 		self::assertCount(1, $this->listener->opened);
 		self::assertSame([[$this->listener->opened[0][0], DisconnectReason::REJECTED_BY_HOST]], $this->listener->closed);

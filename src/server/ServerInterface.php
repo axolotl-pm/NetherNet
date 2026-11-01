@@ -29,7 +29,7 @@ interface ServerInterface{
 	public function sendPacket(int $sessionId, string $payload, Reliability $reliability = Reliability::RELIABLE, ?int $receiptId = null) : void;
 
 	/**
-	 * Disconnects a client once the packets already queued for it have been sent.
+	 * Disconnects a client once it closes after the packets already queued for it, or after a timeout.
 	 */
 	public function closeSession(int $sessionId, DisconnectReason $reason = DisconnectReason::SERVER_DISCONNECT) : void;
 

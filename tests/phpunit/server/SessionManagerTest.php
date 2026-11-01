@@ -22,6 +22,7 @@ use pocketmine\nethernet\protocol\DisconnectReason;
 use pocketmine\nethernet\protocol\Reliability;
 use pocketmine\nethernet\RecordingEventListener;
 use pocketmine\nethernet\RecordingLogger;
+use pocketmine\nethernet\session\Session;
 use pocketmine\nethernet\transport\ChannelPair;
 use pocketmine\nethernet\transport\ConnectionBudgetConfiguration;
 use pocketmine\nethernet\transport\TransportState;
@@ -150,6 +151,10 @@ final class SessionManagerTest extends TestCase{
 
 		$reliable->buffered = 0;
 		$this->manager->tick(1.1);
+		self::assertSame([], $this->listener->closed, "the session closed before the peer had a chance to read what was flushed");
+
+		$reliable->closed = true;
+		$this->manager->tick(1.2);
 		self::assertSame([[$session->getId(), DisconnectReason::SERVER_DISCONNECT]], $this->listener->closed);
 	}
 
@@ -168,6 +173,7 @@ final class SessionManagerTest extends TestCase{
 		self::assertSame(["first"], array_column($this->listener->packets, 1));
 
 		$this->manager->tick(1.1);
+		$this->manager->tick(1.1 + Session::DISCONNECT_TIMEOUT);
 		self::assertSame([[$session->getId(), DisconnectReason::REJECTED_BY_HOST]], $this->listener->closed);
 	}
 
@@ -241,8 +247,10 @@ final class SessionManagerTest extends TestCase{
 
 		$reliable->buffered = 0;
 		$this->manager->tick(1.1);
-
 		self::assertSame([[$session->getId(), 5]], $this->listener->acks);
+
+		$reliable->closed = true;
+		$this->manager->tick(1.2);
 		self::assertSame([[$session->getId(), DisconnectReason::SERVER_DISCONNECT]], $this->listener->closed);
 	}
 

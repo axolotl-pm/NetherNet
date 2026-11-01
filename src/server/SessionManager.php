@@ -96,7 +96,7 @@ final class SessionManager{
 
 	public function tick(float $now) : void{
 		foreach($this->sessions as $id => $session){
-			/* Before the update: a disconnect that finishes flushing closes the session, and its last receipts are owed first. */
+			/* Before the update: a disconnect that completes closes the session, and its last receipts are owed first. */
 			foreach($session->takeAcknowledgedReceipts() as $receiptId){
 				$this->listener->onPacketAck($id, $receiptId);
 			}
