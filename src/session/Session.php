@@ -266,9 +266,9 @@ final class Session{
 		}
 	}
 
-	/** 
-	  * Discards all incoming data on every channel while the peer is disconnecting. Returns false if any channel encounters a transport error.
-	  */
+	/**
+	 * Discards all incoming data on every channel while the peer is disconnecting. Returns false if any channel encounters a transport error.
+	 */
 	private function discardIncoming() : bool{
 		foreach($this->channels->all() as $channel){
 			try{
