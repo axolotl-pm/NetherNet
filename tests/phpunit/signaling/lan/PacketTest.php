@@ -15,11 +15,13 @@ declare(strict_types=1);
 namespace pocketmine\nethernet\signaling\lan;
 
 use PHPUnit\Framework\TestCase;
+use pocketmine\nethernet\signaling\lan\packet\AcknowledgementPacket;
 use pocketmine\nethernet\signaling\lan\packet\DiscoveryCipher;
 use pocketmine\nethernet\signaling\lan\packet\DiscoveryException;
 use pocketmine\nethernet\signaling\lan\packet\MessagePacket;
 use pocketmine\nethernet\signaling\lan\packet\PacketSerializer;
 use pocketmine\nethernet\signaling\lan\packet\PacketType;
+use pocketmine\nethernet\signaling\lan\packet\ReliablePacket;
 use pocketmine\nethernet\signaling\lan\packet\RequestPacket;
 use pocketmine\nethernet\signaling\lan\packet\ResponsePacket;
 use function bin2hex;
@@ -217,6 +219,61 @@ final class PacketTest extends TestCase{
 			$packet = PacketSerializer::decode(DiscoveryCipher::seal($plaintext));
 			self::assertInstanceOf(RequestPacket::class, $packet);
 		}
+	}
+
+	public function testReliablePacketMatchesTheReferenceLayout() : void{
+		$message = new MessagePacket(self::SENDER_ID, 0xAABBCCDD, "Ping");
+		$frame = PacketSerializer::encode(new ReliablePacket(self::SENDER_ID, 0xAABBCCDD, 0x55, 7, $message));
+		$plaintext = openssl_decrypt(substr($frame, 32), "aes-256-ecb", DiscoveryCipher::key(), OPENSSL_RAW_DATA, "");
+		self::assertIsString($plaintext);
+
+		self::assertSame(
+			"5000" . "0300" . "8070605040302010" . "0100000000000000" .
+			"ddccbbaa00000000" . "5500000000000000" . "0700000000000000" .
+			"2400" . "0200" . "8070605040302010" . "0100000000000000" .
+			"ddccbbaa00000000" . "04000000" . bin2hex("Ping"),
+			bin2hex($plaintext)
+		);
+	}
+
+	public function testReliablePacketSurvivesTheRoundTrip() : void{
+		$message = new MessagePacket(self::SENDER_ID, 2, "CONNECTREQUEST 1 offer");
+		$packet = PacketSerializer::decode(PacketSerializer::encode(new ReliablePacket(self::SENDER_ID, 2, 3, 4, $message)));
+
+		self::assertInstanceOf(ReliablePacket::class, $packet);
+		self::assertSame([2, 3, 4], [$packet->recipientId, $packet->nonce, $packet->sequence]);
+		self::assertSame("CONNECTREQUEST 1 offer", $packet->message->data);
+	}
+
+	public function testAcknowledgementSurvivesTheRoundTrip() : void{
+		$frame = PacketSerializer::encode(new AcknowledgementPacket(self::SENDER_ID, 2, 3, 4));
+		$plaintext = openssl_decrypt(substr($frame, 32), "aes-256-ecb", DiscoveryCipher::key(), OPENSSL_RAW_DATA, "");
+		self::assertIsString($plaintext);
+		self::assertSame(0x2c, strlen($plaintext));
+
+		$packet = PacketSerializer::decode($frame);
+		self::assertInstanceOf(AcknowledgementPacket::class, $packet);
+		self::assertSame([2, 3, 4], [$packet->recipientId, $packet->nonce, $packet->sequence]);
+	}
+
+	public function testReliablePacketWithZeroSequenceIsRejected() : void{
+		$this->expectException(DiscoveryException::class);
+		PacketSerializer::decode(PacketSerializer::encode(new ReliablePacket(self::SENDER_ID, 2, 3, 0, new MessagePacket(self::SENDER_ID, 2, "Ping"))));
+	}
+
+	public function testWrappedMessageFromAnotherSenderIsRejected() : void{
+		$this->expectException(DiscoveryException::class);
+		PacketSerializer::decode(PacketSerializer::encode(new ReliablePacket(self::SENDER_ID, 2, 3, 4, new MessagePacket(99, 2, "Ping"))));
+	}
+
+	public function testReliablePacketWithVersionZeroIsRejected() : void{
+		$this->expectException(DiscoveryException::class);
+		PacketSerializer::decode(DiscoveryCipher::seal(PacketSerializer::encodePlaintext(new AcknowledgementPacket(self::SENDER_ID, 2, 3, 4), 0)));
+	}
+
+	public function testUnsupportedProtocolVersionIsRejected() : void{
+		$this->expectException(DiscoveryException::class);
+		PacketSerializer::decode(DiscoveryCipher::seal(PacketSerializer::encodePlaintext(new RequestPacket(self::SENDER_ID), 2)));
 	}
 
 	/** Padding is always added, even when the plaintext is already block aligned. */

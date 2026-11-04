@@ -19,4 +19,10 @@ enum PacketType : int{
 	case REQUEST = 0;
 	case RESPONSE = 1;
 	case MESSAGE = 2;
+	case RELIABLE = 3;
+	case ACKNOWLEDGEMENT = 4;
+
+	public function isReliable() : bool{
+		return $this === self::RELIABLE || $this === self::ACKNOWLEDGEMENT;
+	}
 }

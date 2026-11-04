@@ -18,58 +18,52 @@ use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\DataDecodeException;
 use pmmp\encoding\LE;
-use function str_repeat;
 use function strlen;
 
 final class PacketSerializer{
 
 	private const HEADER_SIZE = 18;
 
-	private const PADDING_SIZE = 8;
+	public const RELIABLE_VERSION = 1;
 
 	private function __construct(){}
 
 	public static function encode(Packet $packet) : string{
+		return DiscoveryCipher::seal(self::encodePlaintext($packet, $packet->getType()->isReliable() ? self::RELIABLE_VERSION : 0));
+	}
+
+	public static function encodePlaintext(Packet $packet, int $version) : string{
 		$body = new ByteBufferWriter();
 		LE::writeUnsignedShort($body, $packet->getType()->value);
 		LE::writeUnsignedLong($body, $packet->senderId);
-		$body->writeByteArray(str_repeat("\x00", self::PADDING_SIZE));
+		LE::writeUnsignedLong($body, $version);
 		$packet->encodeBody($body);
 
 		$payload = new ByteBufferWriter();
 		LE::writeUnsignedShort($payload, strlen($body->getData()) + 2);
 		$payload->writeByteArray($body->getData());
 
-		return DiscoveryCipher::seal($payload->getData());
+		return $payload->getData();
 	}
 
 	/**
 	 * @throws DiscoveryException
 	 */
 	public static function decode(string $frame) : Packet{
-		$payload = DiscoveryCipher::open($frame);
-		if(strlen($payload) < self::HEADER_SIZE + 2){
-			throw new DiscoveryException("Datagram is too short to hold a header");
-		}
-
-		$in = new ByteBufferReader($payload);
+		$in = new ByteBufferReader(DiscoveryCipher::open($frame));
 
 		try{
-			LE::readUnsignedShort($in);
-
-			$rawType = LE::readUnsignedShort($in);
-			$senderId = LE::readUnsignedLong($in);
-			$in->readByteArray(self::PADDING_SIZE);
-
-			$type = PacketType::tryFrom($rawType);
-			if($type === null){
-				throw new DiscoveryException("Unknown packet type $rawType");
+			[$type, $senderId, $version] = self::readHeader($in);
+			if($type->isReliable() && $version !== self::RELIABLE_VERSION){
+				throw new DiscoveryException("Reliable packet has protocol version $version");
 			}
 
 			$packet = match($type){
 				PacketType::REQUEST => new RequestPacket($senderId),
 				PacketType::RESPONSE => ResponsePacket::decodeBody($senderId, $in),
-				PacketType::MESSAGE => MessagePacket::decodeBody($senderId, $in)
+				PacketType::MESSAGE => MessagePacket::decodeBody($senderId, $in),
+				PacketType::RELIABLE => ReliablePacket::decodeBody($senderId, $in),
+				PacketType::ACKNOWLEDGEMENT => AcknowledgementPacket::decodeBody($senderId, $in)
 			};
 
 			if($in->getUnreadLength() !== 0){
@@ -80,5 +74,43 @@ final class PacketSerializer{
 		}
 
 		return $packet;
+	}
+
+	/**
+	 * @throws DataDecodeException
+	 * @throws DiscoveryException
+	 */
+	public static function decodeWrappedMessage(ByteBufferReader $in) : MessagePacket{
+		[$type, $senderId, $version] = self::readHeader($in);
+		if($type !== PacketType::MESSAGE || $version !== self::RELIABLE_VERSION){
+			throw new DiscoveryException("Invalid wrapped message of type $type->name and protocol version $version");
+		}
+
+		return MessagePacket::decodeBody($senderId, $in);
+	}
+
+	/**
+	 * @return array{PacketType, int, int}
+	 *
+	 * @throws DataDecodeException
+	 * @throws DiscoveryException
+	 */
+	private static function readHeader(ByteBufferReader $in) : array{
+		if($in->getUnreadLength() < self::HEADER_SIZE + 2){
+			throw new DiscoveryException("Datagram is too short to hold a header");
+		}
+
+		LE::readUnsignedShort($in);
+
+		$rawType = LE::readUnsignedShort($in);
+		$senderId = LE::readUnsignedLong($in);
+		$version = LE::readUnsignedLong($in);
+
+		$type = PacketType::tryFrom($rawType) ?? throw new DiscoveryException("Unknown packet type $rawType");
+		if($version < 0 || $version > self::RELIABLE_VERSION){
+			throw new DiscoveryException("Unsupported protocol version $version");
+		}
+
+		return [$type, $senderId, $version];
 	}
 }

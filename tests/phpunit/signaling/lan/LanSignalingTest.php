@@ -26,8 +26,10 @@ use pocketmine\nethernet\protocol\ErrorCode;
 use pocketmine\nethernet\RecordingEventListener;
 use pocketmine\nethernet\RecordingLogger;
 use pocketmine\nethernet\server\NetherNetServer;
+use pocketmine\nethernet\signaling\lan\packet\AcknowledgementPacket;
 use pocketmine\nethernet\signaling\lan\packet\MessagePacket;
 use pocketmine\nethernet\signaling\lan\packet\PacketSerializer;
+use pocketmine\nethernet\signaling\lan\packet\ReliablePacket;
 use pocketmine\nethernet\signaling\lan\packet\RequestPacket;
 use pocketmine\nethernet\signaling\lan\packet\ResponsePacket;
 use pocketmine\nethernet\signaling\Signal;
@@ -226,6 +228,35 @@ final class LanSignalingTest extends TestCase{
 
 		$this->sendToHost(new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "CANDIDATEADD 77 candidate:9 1 udp 1 10.0.0.1 5 typ host"));
 		$this->receive();
+
+		self::assertSame(["candidate:9 1 udp 1 10.0.0.1 5 typ host"], $negotiator->negotiation?->remoteCandidates);
+	}
+
+	public function testReliableOfferIsAcknowledgedAndAnswered() : void{
+		$this->startHost(new FakeNegotiator("answer-sdp"));
+		$offer = new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "CONNECTREQUEST 77 offer-sdp");
+		$this->sendToHost(new ReliablePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, 5, 1, $offer));
+
+		$ack = $this->receive();
+		self::assertInstanceOf(AcknowledgementPacket::class, $ack);
+		self::assertSame([self::HOST_NETWORK_ID, self::PEER_NETWORK_ID, 5, 1], [$ack->senderId, $ack->recipientId, $ack->nonce, $ack->sequence]);
+
+		$answer = $this->receive();
+		self::assertInstanceOf(MessagePacket::class, $answer);
+		self::assertSame(SignalType::CONNECT_RESPONSE, Signal::parse($answer->data)->type);
+	}
+
+	public function testRepeatedReliableMessageIsAcknowledgedButDeliveredOnce() : void{
+		$negotiator = new FakeNegotiator("answer-sdp");
+		$this->startHost($negotiator);
+		$this->sendToHost(new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "CONNECTREQUEST 77 offer-sdp"));
+		self::assertNotNull($this->receive());
+
+		$candidate = new MessagePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, "CANDIDATEADD 77 candidate:9 1 udp 1 10.0.0.1 5 typ host");
+		for($i = 0; $i < 2; ++$i){
+			$this->sendToHost(new ReliablePacket(self::PEER_NETWORK_ID, self::HOST_NETWORK_ID, 5, 3, $candidate));
+			self::assertInstanceOf(AcknowledgementPacket::class, $this->receive());
+		}
 
 		self::assertSame(["candidate:9 1 udp 1 10.0.0.1 5 typ host"], $negotiator->negotiation?->remoteCandidates);
 	}

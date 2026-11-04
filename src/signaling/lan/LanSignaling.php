@@ -20,10 +20,12 @@ use pocketmine\nethernet\negotiation\CandidateMode;
 use pocketmine\nethernet\negotiation\NegotiationException;
 use pocketmine\nethernet\negotiation\Negotiator;
 use pocketmine\nethernet\protocol\ErrorCode;
+use pocketmine\nethernet\signaling\lan\packet\AcknowledgementPacket;
 use pocketmine\nethernet\signaling\lan\packet\DiscoveryException;
 use pocketmine\nethernet\signaling\lan\packet\MessagePacket;
 use pocketmine\nethernet\signaling\lan\packet\Packet;
 use pocketmine\nethernet\signaling\lan\packet\PacketSerializer;
+use pocketmine\nethernet\signaling\lan\packet\ReliablePacket;
 use pocketmine\nethernet\signaling\lan\packet\RequestPacket;
 use pocketmine\nethernet\signaling\lan\packet\ResponsePacket;
 use pocketmine\nethernet\signaling\Signal;
@@ -36,6 +38,7 @@ use pocketmine\nethernet\utils\AddressBlockList;
 use pocketmine\nethernet\utils\DatagramSocket;
 use pocketmine\nethernet\utils\InternetAddress;
 use pocketmine\nethernet\utils\SocketException;
+use function count;
 use function sprintf;
 
 /**
@@ -53,6 +56,9 @@ final class LanSignaling implements Signaling{
 
 	private const PING_DATA = "Ping";
 
+	private const MAX_RELIABLE_WINDOWS = 256;
+	private const RELIABLE_WINDOW_TIMEOUT = 60.0;
+
 	private ?DatagramSocket $socket = null;
 
 	/**
@@ -66,6 +72,9 @@ final class LanSignaling implements Signaling{
 	/** @phpstan-var array<string, int> keyed by address, for the current second */
 	private array $discoveryRequests = [];
 	private float $discoveryRequestsExpiry = 0.0;
+
+	/** @phpstan-var array<string, ReliableReceiveWindow> keyed by sender and nonce */
+	private array $reliableWindows = [];
 
 	private SignalingState $state = SignalingState::CREATED;
 
@@ -138,8 +147,13 @@ final class LanSignaling implements Signaling{
 			$this->discoveryRequests = [];
 			$this->discoveryRequestsExpiry = $now + 1.0;
 		}
+		foreach($this->reliableWindows as $key => $window){
+			if($now - $window->getLastActivity() >= self::RELIABLE_WINDOW_TIMEOUT){
+				unset($this->reliableWindows[$key]);
+			}
+		}
 
-		$this->receiveAll($socket);
+		$this->receiveAll($socket, $now);
 		$this->processConnections();
 	}
 
@@ -153,12 +167,13 @@ final class LanSignaling implements Signaling{
 			$connection->negotiation->fail("LAN signaling is shutting down", ErrorCode::NO_SIGNALING_CHANNEL);
 		}
 		$this->connections = [];
+		$this->reliableWindows = [];
 
 		$this->socket?->close();
 		$this->socket = null;
 	}
 
-	private function receiveAll(DatagramSocket $socket) : void{
+	private function receiveAll(DatagramSocket $socket, float $now) : void{
 		for($i = 0; $i < self::MAX_DATAGRAMS_PER_TICK; ++$i){
 			try{
 				$received = $socket->receive();
@@ -177,7 +192,7 @@ final class LanSignaling implements Signaling{
 			}
 
 			try{
-				$this->handleDatagram($datagram, $address);
+				$this->handleDatagram($datagram, $address, $now);
 			}catch(SignalingException $e){
 				$this->logger->debug("Ignoring a datagram from $address: " . $e->getMessage());
 			}
@@ -187,7 +202,7 @@ final class LanSignaling implements Signaling{
 	/**
 	 * @throws SignalingException
 	 */
-	private function handleDatagram(string $datagram, InternetAddress $address) : void{
+	private function handleDatagram(string $datagram, InternetAddress $address, float $now) : void{
 		$packet = PacketSerializer::decode($datagram);
 
 		/* Broadcasts come straight back to the socket that sent them. */
@@ -210,6 +225,35 @@ final class LanSignaling implements Signaling{
 		}
 		if($packet instanceof MessagePacket){
 			$this->handleMessage($packet, $address);
+		}elseif($packet instanceof ReliablePacket){
+			$this->handleReliable($packet, $address, $now);
+		}
+	}
+
+	/**
+	 * @throws SignalingException
+	 */
+	private function handleReliable(ReliablePacket $packet, InternetAddress $address, float $now) : void{
+		if($packet->recipientId !== $this->networkId){
+			return;
+		}
+
+		$key = $packet->senderId . "/" . $packet->nonce;
+		$window = $this->reliableWindows[$key] ?? null;
+		if($window === null){
+			if(count($this->reliableWindows) >= self::MAX_RELIABLE_WINDOWS){
+				return;
+			}
+			$window = $this->reliableWindows[$key] = new ReliableReceiveWindow($now);
+		}
+		if(!$window->covers($packet->sequence)){
+			return;
+		}
+
+		$firstDelivery = $window->receive($packet->sequence, $now);
+		$this->send(new AcknowledgementPacket($this->networkId, $packet->senderId, $packet->nonce, $packet->sequence), $address);
+		if($firstDelivery){
+			$this->handleMessage($packet->message, $address);
 		}
 	}
 
